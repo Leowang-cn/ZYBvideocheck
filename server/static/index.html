@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>视频走查</title>
+  <style>
+    :root { color-scheme: light; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; color: #172126; background: #eef2f3; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header { display: flex; justify-content: space-between; align-items: end; padding: 20px 24px; color: white; background: #153f4a; }
+    h1 { margin: 0; font-size: 22px; letter-spacing: 0; }
+    header span { color: #cfe1e4; font-size: 13px; }
+    main { padding: 18px 20px 28px; }
+    .toolbar { display: grid; grid-template-columns: 1.4fr repeat(6, minmax(130px, 1fr)) auto; gap: 10px; align-items: end; margin-bottom: 14px; }
+    label { display: grid; gap: 5px; color: #56666c; font-size: 12px; }
+    input, select, textarea, button { min-height: 36px; border: 1px solid #b8c5c9; background: white; font: inherit; }
+    input, select, textarea { width: 100%; padding: 7px 9px; }
+    button { padding: 7px 12px; color: #153f4a; cursor: pointer; font-weight: 600; }
+    button:disabled { cursor: wait; opacity: .55; }
+    .table-wrap { overflow: auto; background: white; border: 1px solid #d5dee0; }
+    table { width: 100%; min-width: 1680px; border-collapse: collapse; }
+    th, td { padding: 10px; border-bottom: 1px solid #dce3e5; text-align: left; vertical-align: top; }
+    th { position: sticky; top: 0; z-index: 1; color: #33474e; background: #e4ecee; white-space: nowrap; }
+    td { font-size: 14px; }
+    .name { min-width: 220px; font-weight: 600; }
+    .meta { white-space: nowrap; color: #53666d; }
+    .shots { display: flex; gap: 8px; min-width: 320px; }
+    .shots img { width: 144px; height: 81px; object-fit: contain; background: #152126; cursor: zoom-in; }
+    textarea { min-width: 170px; min-height: 82px; resize: vertical; }
+    .review { min-width: 130px; }
+    .save { width: 100%; margin-top: 7px; }
+    .status { display: block; min-height: 18px; margin-top: 4px; color: #597078; font-size: 12px; }
+    .pager { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 12px; }
+    a { color: #086b7d; }
+    dialog { width: min(1200px, calc(100vw - 30px)); padding: 0; border: 0; background: #101719; }
+    dialog::backdrop { background: rgb(0 0 0 / 82%); }
+    dialog img { display: block; width: 100%; max-height: calc(100vh - 70px); object-fit: contain; }
+    .close { position: absolute; top: 8px; right: 8px; width: 40px; border: 0; color: white; background: rgb(0 0 0 / 65%); font-size: 22px; }
+    .empty { padding: 44px; color: #627278; text-align: center; }
+    @media (max-width: 1000px) { .toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); } header { align-items: start; gap: 10px; } }
+  </style>
+</head>
+<body>
+  <header><h1>视频走查</h1><span id="summary">正在读取数据</span></header>
+  <main>
+    <form class="toolbar" id="filters">
+      <label>视频名称<input name="keyword" type="search" placeholder="输入名称"></label>
+      <label>一级地址<select name="level_1"><option value="">全部</option></select></label>
+      <label>二级地址<select name="level_2"><option value="">全部</option></select></label>
+      <label>批次<select name="batch"><option value="">全部</option></select></label>
+      <label>日期从<input name="created_from" type="date"></label>
+      <label>日期至<input name="created_to" type="date"></label>
+      <label>评级<select name="rating"><option value="">全部</option><option>未评级</option><option>优秀</option><option>良好</option><option>合格</option><option>不合格</option></select></label>
+      <button type="button" id="export">导出 CSV</button>
+    </form>
+    <div class="table-wrap">
+      <table><thead><tr><th>一级地址</th><th>二级地址</th><th>创建日期</th><th>视频名称</th><th>视频</th><th>截图</th><th>文件信息</th><th>评级</th><th>质检备注</th><th>补充</th></tr></thead><tbody id="rows"></tbody></table>
+      <div class="empty" id="empty" hidden>没有符合条件的视频</div>
+    </div>
+    <div class="pager"><button id="prev" type="button">上一页</button><span id="page-label"></span><button id="next" type="button">下一页</button></div>
+  </main>
+  <dialog id="viewer"><button class="close" type="button" aria-label="关闭">×</button><img alt="截图原图"></dialog>
+  <script>
+    const state = { page: 1, pageSize: 50, total: 0 };
+    const filters = document.querySelector("#filters");
+    const rows = document.querySelector("#rows");
+    const viewer = document.querySelector("#viewer");
+    const viewerImage = viewer.querySelector("img");
+
+    function query(includePage = true) {
+      const params = new URLSearchParams(new FormData(filters));
+      for (const [key, value] of [...params]) if (!value) params.delete(key);
+      if (includePage) { params.set("page", state.page); params.set("page_size", state.pageSize); }
+      return params;
+    }
+
+    function element(tag, text, className) {
+      const node = document.createElement(tag);
+      if (text !== undefined) node.textContent = text;
+      if (className) node.className = className;
+      return node;
+    }
+
+    function formatDuration(seconds) {
+      const value = Math.round(seconds);
+      return [Math.floor(value / 3600), Math.floor(value % 3600 / 60), value % 60].map(part => String(part).padStart(2, "0")).join(":");
+    }
+
+    function buildRow(video) {
+      const row = document.createElement("tr");
+      row.append(element("td", video.level_1));
+      row.append(element("td", video.level_2));
+      row.append(element("td", video.created_date, "meta"));
+      const name = element("td", undefined, "name");
+      name.append(document.createTextNode(video.file_name), element("br"), element("small", `批次：${video.batch}`));
+      row.append(name);
+      const media = element("td");
+      const videoLink = element("a", "打开视频"); videoLink.href = video.video_url; videoLink.target = "_blank"; media.append(videoLink); row.append(media);
+      const shotsCell = element("td"); const shots = element("div", undefined, "shots");
+      for (const snapshot of video.snapshots) {
+        const image = element("img"); image.src = snapshot.url; image.alt = `截图 ${snapshot.sequence}`; image.title = formatDuration(snapshot.second);
+        image.addEventListener("click", () => { viewerImage.src = snapshot.url; viewer.showModal(); }); shots.append(image);
+      }
+      shotsCell.append(shots); row.append(shotsCell);
+      row.append(element("td", `${(video.file_size / 1048576).toFixed(1)} MB\n${formatDuration(video.duration)}\n${video.width} × ${video.height}`, "meta"));
+      const ratingCell = element("td", undefined, "review"); const rating = element("select");
+      for (const value of ["未评级", "优秀", "良好", "合格", "不合格"]) { const option = element("option", value); option.value = value; rating.append(option); }
+      rating.value = video.review.rating; ratingCell.append(rating); row.append(ratingCell);
+      const noteCell = element("td"); const note = element("textarea"); note.value = video.review.review_note; noteCell.append(note); row.append(noteCell);
+      const supplementCell = element("td"); const supplement = element("textarea"); supplement.value = video.review.supplement;
+      const save = element("button", "保存", "save"); save.type = "button"; const status = element("span", "", "status");
+      save.addEventListener("click", async () => {
+        save.disabled = true; status.textContent = "保存中";
+        const response = await fetch(`/api/videos/${video.video_id}/review`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rating: rating.value, review_note: note.value, supplement: supplement.value, version: video.review.version }) });
+        const data = await response.json();
+        if (response.ok) { video.review = data; status.textContent = "已保存"; } else { status.textContent = data.detail || "保存失败"; }
+        save.disabled = false;
+      });
+      supplementCell.append(supplement, save, status); row.append(supplementCell);
+      return row;
+    }
+
+    async function load() {
+      const response = await fetch(`/api/videos?${query()}`); const data = await response.json();
+      state.total = data.total; rows.replaceChildren(...data.items.map(buildRow));
+      document.querySelector("#empty").hidden = data.items.length > 0;
+      const pages = Math.max(1, Math.ceil(state.total / state.pageSize));
+      document.querySelector("#summary").textContent = `共 ${state.total} 条记录`;
+      document.querySelector("#page-label").textContent = `第 ${state.page} / ${pages} 页`;
+      document.querySelector("#prev").disabled = state.page <= 1;
+      document.querySelector("#next").disabled = state.page >= pages;
+    }
+
+    async function loadOptions() {
+      const options = await (await fetch("/api/videos/options")).json();
+      for (const field of ["level_1", "level_2", "batch"]) {
+        const select = filters.elements[field];
+        for (const value of options[field]) { const option = element("option", value || "（空）"); option.value = value; select.append(option); }
+      }
+    }
+
+    filters.addEventListener("submit", event => event.preventDefault());
+    filters.addEventListener("change", () => { state.page = 1; load(); });
+    filters.elements.keyword.addEventListener("input", () => { clearTimeout(state.timer); state.timer = setTimeout(() => { state.page = 1; load(); }, 250); });
+    document.querySelector("#prev").addEventListener("click", () => { state.page -= 1; load(); });
+    document.querySelector("#next").addEventListener("click", () => { state.page += 1; load(); });
+    document.querySelector("#export").addEventListener("click", () => { location.href = `/api/videos/export.csv?${query(false)}`; });
+    viewer.querySelector(".close").addEventListener("click", () => viewer.close());
+    viewer.addEventListener("click", event => { if (event.target === viewer) viewer.close(); });
+    loadOptions().then(load);
+  </script>
+</body>
+</html>

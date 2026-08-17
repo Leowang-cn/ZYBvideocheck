@@ -1,0 +1,16 @@
+.env
+.env.server
+.git
+.gitignore
+.venv
+__pycache__
+*.py[cod]
+*.sqlite
+*.sqlite3
+待处理视频
+输出
+数据
+tests
+deploy
+*.md
+运行视频走查.command
