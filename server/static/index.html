@@ -36,6 +36,7 @@
     dialog { width: min(1200px, calc(100vw - 30px)); padding: 0; border: 0; background: #101719; }
     dialog::backdrop { background: rgb(0 0 0 / 82%); }
     dialog img { display: block; width: 100%; max-height: calc(100vh - 70px); object-fit: contain; }
+    dialog video { display: block; width: 100%; max-height: calc(100vh - 70px); background: black; }
     .close { position: absolute; top: 8px; right: 8px; width: 40px; border: 0; color: white; background: rgb(0 0 0 / 65%); font-size: 22px; }
     .empty { padding: 44px; color: #627278; text-align: center; }
     @media (max-width: 1000px) { .toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); } header { align-items: start; gap: 10px; } }
@@ -61,12 +62,15 @@
     <div class="pager"><button id="prev" type="button">上一页</button><span id="page-label"></span><button id="next" type="button">下一页</button></div>
   </main>
   <dialog id="viewer"><button class="close" type="button" aria-label="关闭">×</button><img alt="截图原图"></dialog>
+  <dialog id="video-viewer"><button class="close" type="button" aria-label="关闭">×</button><video controls playsinline preload="metadata"></video></dialog>
   <script>
     const state = { page: 1, pageSize: 50, total: 0 };
     const filters = document.querySelector("#filters");
     const rows = document.querySelector("#rows");
     const viewer = document.querySelector("#viewer");
     const viewerImage = viewer.querySelector("img");
+    const videoViewer = document.querySelector("#video-viewer");
+    const videoPlayer = videoViewer.querySelector("video");
 
     function query(includePage = true) {
       const params = new URLSearchParams(new FormData(filters));
@@ -96,7 +100,9 @@
       name.append(document.createTextNode(video.file_name), element("br"), element("small", `批次：${video.batch}`));
       row.append(name);
       const media = element("td");
-      const videoLink = element("a", "打开视频"); videoLink.href = video.video_url; videoLink.target = "_blank"; media.append(videoLink); row.append(media);
+      const videoButton = element("button", "播放视频"); videoButton.type = "button";
+      videoButton.addEventListener("click", () => { videoPlayer.src = video.video_url; videoViewer.showModal(); videoPlayer.play(); });
+      media.append(videoButton); row.append(media);
       const shotsCell = element("td"); const shots = element("div", undefined, "shots");
       for (const snapshot of video.snapshots) {
         const image = element("img"); image.src = snapshot.url; image.alt = `截图 ${snapshot.sequence}`; image.title = formatDuration(snapshot.second);
@@ -148,6 +154,10 @@
     document.querySelector("#export").addEventListener("click", () => { location.href = `/api/videos/export.csv?${query(false)}`; });
     viewer.querySelector(".close").addEventListener("click", () => viewer.close());
     viewer.addEventListener("click", event => { if (event.target === viewer) viewer.close(); });
+    function closeVideo() { videoPlayer.pause(); videoPlayer.removeAttribute("src"); videoPlayer.load(); videoViewer.close(); }
+    videoViewer.querySelector(".close").addEventListener("click", closeVideo);
+    videoViewer.addEventListener("click", event => { if (event.target === videoViewer) closeVideo(); });
+    videoViewer.addEventListener("cancel", event => { event.preventDefault(); closeVideo(); });
     loadOptions().then(load);
   </script>
 </body>
