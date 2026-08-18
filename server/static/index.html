@@ -29,6 +29,12 @@
     .shots img { width: 144px; height: 81px; object-fit: contain; background: #152126; cursor: zoom-in; }
     textarea { min-width: 170px; min-height: 82px; resize: vertical; }
     .review { min-width: 130px; }
+    .review select { font-weight: 600; transition: background-color .15s, border-color .15s; }
+    .rating-unrated { color: #46575d; border-color: #aebbc0; background: #edf1f2; }
+    .rating-excellent { color: #155b38; border-color: #70b78f; background: #d9f2e3; }
+    .rating-good { color: #155477; border-color: #75afd0; background: #dceef8; }
+    .rating-pass { color: #725500; border-color: #d4b950; background: #fff1b8; }
+    .rating-fail { color: #8a2730; border-color: #d98990; background: #f9dadd; }
     .save { width: 100%; margin-top: 7px; }
     .status { display: block; min-height: 18px; margin-top: 4px; color: #597078; font-size: 12px; }
     .pager { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 12px; }
@@ -112,7 +118,9 @@
       row.append(element("td", `${(video.file_size / 1048576).toFixed(1)} MB\n${formatDuration(video.duration)}\n${video.width} × ${video.height}`, "meta"));
       const ratingCell = element("td", undefined, "review"); const rating = element("select");
       for (const value of ["未评级", "优秀", "良好", "合格", "不合格"]) { const option = element("option", value); option.value = value; rating.append(option); }
-      rating.value = video.review.rating; ratingCell.append(rating); row.append(ratingCell);
+      const ratingClasses = { "未评级": "rating-unrated", "优秀": "rating-excellent", "良好": "rating-good", "合格": "rating-pass", "不合格": "rating-fail" };
+      function updateRatingColor() { rating.className = ratingClasses[rating.value] || "rating-unrated"; }
+      rating.value = video.review.rating; updateRatingColor(); rating.addEventListener("change", updateRatingColor); ratingCell.append(rating); row.append(ratingCell);
       const noteCell = element("td"); const note = element("textarea"); note.value = video.review.review_note; noteCell.append(note); row.append(noteCell);
       const supplementCell = element("td"); const supplement = element("textarea"); supplement.value = video.review.supplement;
       const save = element("button", "保存", "save"); save.type = "button"; const status = element("span", "", "status");
