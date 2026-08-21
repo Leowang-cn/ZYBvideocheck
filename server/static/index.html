@@ -158,10 +158,6 @@
     document.querySelector("#export").addEventListener("click", () => { location.href = `/api/videos/export.csv?${query(false)}`; });
     viewer.querySelector(".close").addEventListener("click", () => viewer.close());
     viewer.addEventListener("click", event => { if (event.target === viewer) viewer.close(); });
-    function closeVideo() { videoPlayer.pause(); videoPlayer.removeAttribute("src"); videoPlayer.load(); videoViewer.close(); }
-    videoViewer.querySelector(".close").addEventListener("click", closeVideo);
-    videoViewer.addEventListener("click", event => { if (event.target === videoViewer) closeVideo(); });
-    videoViewer.addEventListener("cancel", event => { event.preventDefault(); closeVideo(); });
     loadOptions().then(load);
   </script>
 </body>
