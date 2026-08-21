@@ -38,11 +38,19 @@
     .status { display: block; min-height: 18px; margin-top: 4px; color: #597078; font-size: 12px; }
     .pager { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 12px; }
     a { color: #086b7d; }
-    dialog { width: min(1200px, calc(100vw - 30px)); padding: 0; border: 0; background: #101719; }
+    dialog { width: min(1280px, calc(100vw - 30px)); max-height: calc(100vh - 24px); padding: 0; border: 0; background: #101719; color: white; }
     dialog::backdrop { background: rgb(0 0 0 / 82%); }
-    dialog img { display: block; width: 100%; max-height: calc(100vh - 70px); object-fit: contain; }
-    dialog video { display: block; width: 100%; max-height: calc(100vh - 70px); background: black; }
-    .close { position: absolute; top: 8px; right: 8px; width: 40px; border: 0; color: white; background: rgb(0 0 0 / 65%); font-size: 22px; }
+    .showcase { display: grid; grid-template-columns: 48px minmax(0, 1fr) 48px; align-items: center; min-height: min(620px, calc(100vh - 360px)); background: #080d0f; }
+    .showcase img { display: block; width: 100%; height: min(620px, calc(100vh - 360px)); object-fit: contain; }
+    .showcase-nav, .close { min-height: 44px; border: 0; color: white; background: rgb(0 0 0 / 60%); font-size: 28px; }
+    .close { position: absolute; top: 8px; right: 8px; z-index: 2; width: 40px; font-size: 22px; }
+    .showcase-info { display: flex; justify-content: space-between; gap: 12px; padding: 8px 16px; color: #d3e0e2; font-size: 13px; }
+    .showcase-actions { display: flex; gap: 6px; }
+    .showcase-actions button { min-height: 30px; border: 1px solid #60777e; color: white; background: transparent; font-size: 12px; }
+    .showcase-form { display: grid; grid-template-columns: 150px 150px minmax(190px, 1fr) minmax(190px, 1fr); gap: 10px; padding: 10px 16px 16px; background: #eef2f3; color: #172126; }
+    .showcase-form label { color: #56666c; }
+    .showcase-form textarea { min-height: 58px; }
+    .showcase-status { grid-column: 1 / -1; min-height: 17px; color: #597078; font-size: 12px; }
     .empty { padding: 44px; color: #627278; text-align: center; }
     @media (max-width: 1000px) { .toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); } header { align-items: start; gap: 10px; } }
   </style>
@@ -66,13 +74,37 @@
     </div>
     <div class="pager"><button id="prev" type="button">上一页</button><span id="page-label"></span><button id="next" type="button">下一页</button></div>
   </main>
-  <dialog id="viewer"><button class="close" type="button" aria-label="关闭">×</button><img alt="截图原图"></dialog>
+  <dialog id="viewer">
+    <button class="close" type="button" aria-label="关闭">×</button>
+    <div class="showcase">
+      <button class="showcase-nav" id="previous-shot" type="button" aria-label="上一张图片">‹</button>
+      <img id="showcase-image" alt="截图原图">
+      <button class="showcase-nav" id="next-shot" type="button" aria-label="下一张图片">›</button>
+    </div>
+    <div class="showcase-info"><span><span id="showcase-name"></span> <a id="showcase-video-link" target="_blank" rel="noopener noreferrer">打开原视频</a></span><span class="showcase-actions"><button id="previous-video" type="button">上一视频</button><span id="showcase-shot-label"></span><button id="next-video" type="button">下一视频</button></span></div>
+    <div class="showcase-form">
+      <label>原片类型<select id="showcase-original-type"><option value="">（空）</option><option>新片</option><option>旧片新剪</option><option>人像原片</option><option>屏幕原片</option></select></label>
+      <label>评级<select id="showcase-rating"><option>未评级</option><option>优秀</option><option>良好</option><option>合格</option><option>不合格</option><option>无需审核</option></select></label>
+      <label>质检备注<textarea id="showcase-note"></textarea></label>
+      <label>补充<textarea id="showcase-supplement"></textarea></label>
+      <span class="showcase-status" id="showcase-status"></span>
+    </div>
+  </dialog>
   <script>
     const state = { page: 1, pageSize: 50, total: 0 };
     const filters = document.querySelector("#filters");
     const rows = document.querySelector("#rows");
     const viewer = document.querySelector("#viewer");
-    const viewerImage = viewer.querySelector("img");
+    const showcaseImage = document.querySelector("#showcase-image");
+    const showcaseName = document.querySelector("#showcase-name");
+    const showcaseVideoLink = document.querySelector("#showcase-video-link");
+    const showcaseShotLabel = document.querySelector("#showcase-shot-label");
+    const showcaseOriginalType = document.querySelector("#showcase-original-type");
+    const showcaseRating = document.querySelector("#showcase-rating");
+    const showcaseNote = document.querySelector("#showcase-note");
+    const showcaseSupplement = document.querySelector("#showcase-supplement");
+    const showcaseStatus = document.querySelector("#showcase-status");
+    const showcase = { videos: [], videoIndex: 0, shotIndex: 0, saving: false, saveAgain: false };
 
     function query(includePage = true) {
       const params = new URLSearchParams(new FormData(filters));
@@ -93,7 +125,60 @@
       return [Math.floor(value / 3600), Math.floor(value % 3600 / 60), value % 60].map(part => String(part).padStart(2, "0")).join(":");
     }
 
-    function buildRow(video) {
+    function updateShowcase() {
+      const video = showcase.videos[showcase.videoIndex];
+      if (!video) return;
+      const snapshot = video.snapshots[showcase.shotIndex];
+      showcaseImage.src = snapshot.url;
+      showcaseImage.title = formatDuration(snapshot.second);
+      showcaseName.textContent = video.file_name;
+      showcaseVideoLink.href = video.video_url;
+      showcaseShotLabel.textContent = `视频 ${showcase.videoIndex + 1} / ${showcase.videos.length} · 图片 ${showcase.shotIndex + 1} / ${video.snapshots.length} · ${formatDuration(snapshot.second)}`;
+      showcaseOriginalType.value = video.review.original_type || "";
+      showcaseRating.value = video.review.rating || "未评级";
+      showcaseNote.value = video.review.review_note || "";
+      showcaseSupplement.value = video.review.supplement || "";
+      showcaseStatus.textContent = "";
+    }
+
+    function openShowcase(videos, videoIndex, shotIndex) {
+      showcase.videos = videos;
+      showcase.videoIndex = videoIndex;
+      showcase.shotIndex = shotIndex;
+      updateShowcase();
+      viewer.showModal();
+    }
+
+    function moveShowcaseVideo(step) {
+      if (!showcase.videos.length) return;
+      showcase.videoIndex = (showcase.videoIndex + step + showcase.videos.length) % showcase.videos.length;
+      showcase.shotIndex = 0;
+      updateShowcase();
+    }
+
+    function moveShowcaseShot(step) {
+      const video = showcase.videos[showcase.videoIndex];
+      if (!video) return;
+      showcase.shotIndex = (showcase.shotIndex + step + video.snapshots.length) % video.snapshots.length;
+      updateShowcase();
+    }
+
+    async function saveShowcaseReview() {
+      const video = showcase.videos[showcase.videoIndex];
+      if (!video) return;
+      if (showcase.saving) { showcase.saveAgain = true; return; }
+      showcase.saving = true;
+      showcaseStatus.textContent = "保存中";
+      try {
+        const response = await fetch(`/api/videos/${video.video_id}/review`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ original_type: showcaseOriginalType.value, rating: showcaseRating.value, review_note: showcaseNote.value, supplement: showcaseSupplement.value, version: video.review.version }) });
+        const data = await response.json();
+        if (response.ok) { video.review = data; showcaseStatus.textContent = "已保存"; } else { showcaseStatus.textContent = data.detail || "保存失败，请刷新后重试"; }
+      } catch (error) { showcaseStatus.textContent = "保存失败，请检查网络"; }
+      showcase.saving = false;
+      if (showcase.saveAgain) { showcase.saveAgain = false; saveShowcaseReview(); }
+    }
+
+    function buildRow(video, videos, videoIndex) {
       const row = document.createElement("tr");
       row.append(element("td", video.level_1));
       row.append(element("td", video.level_2));
@@ -105,9 +190,9 @@
       const videoLink = element("a", "打开原视频"); videoLink.href = video.video_url; videoLink.target = "_blank"; videoLink.rel = "noopener noreferrer";
       media.append(videoLink); row.append(media);
       const shotsCell = element("td"); const shots = element("div", undefined, "shots");
-      for (const snapshot of video.snapshots) {
+      for (const [shotIndex, snapshot] of video.snapshots.entries()) {
         const image = element("img"); image.src = snapshot.url; image.alt = `截图 ${snapshot.sequence}`; image.title = formatDuration(snapshot.second);
-        image.addEventListener("click", () => { viewerImage.src = snapshot.url; viewer.showModal(); }); shots.append(image);
+        image.addEventListener("click", () => openShowcase(videos, videoIndex, shotIndex)); shots.append(image);
       }
       shotsCell.append(shots); row.append(shotsCell);
       row.append(element("td", `${(video.file_size / 1048576).toFixed(1)} MB\n${formatDuration(video.duration)}\n${video.width} × ${video.height}`, "meta"));
@@ -142,7 +227,7 @@
 
     async function load() {
       const response = await fetch(`/api/videos?${query()}`); const data = await response.json();
-      state.total = data.total; rows.replaceChildren(...data.items.map(buildRow));
+      state.total = data.total; showcase.videos = data.items; rows.replaceChildren(...data.items.map((video, index) => buildRow(video, data.items, index)));
       document.querySelector("#empty").hidden = data.items.length > 0;
       const pages = Math.max(1, Math.ceil(state.total / state.pageSize));
       document.querySelector("#summary").textContent = `共 ${state.total} 条记录`;
@@ -165,8 +250,22 @@
     document.querySelector("#prev").addEventListener("click", () => { state.page -= 1; load(); });
     document.querySelector("#next").addEventListener("click", () => { state.page += 1; load(); });
     document.querySelector("#export").addEventListener("click", () => { location.href = `/api/videos/export.csv?${query(false)}`; });
+    document.querySelector("#previous-video").addEventListener("click", () => moveShowcaseVideo(-1));
+    document.querySelector("#next-video").addEventListener("click", () => moveShowcaseVideo(1));
+    document.querySelector("#previous-shot").addEventListener("click", () => moveShowcaseShot(-1));
+    document.querySelector("#next-shot").addEventListener("click", () => moveShowcaseShot(1));
+    document.querySelector("#showcase-original-type").addEventListener("change", saveShowcaseReview);
+    document.querySelector("#showcase-rating").addEventListener("change", saveShowcaseReview);
+    document.querySelector("#showcase-note").addEventListener("blur", saveShowcaseReview);
+    document.querySelector("#showcase-supplement").addEventListener("blur", saveShowcaseReview);
     viewer.querySelector(".close").addEventListener("click", () => viewer.close());
     viewer.addEventListener("click", event => { if (event.target === viewer) viewer.close(); });
+    viewer.addEventListener("keydown", event => {
+      if (event.key === "ArrowLeft") moveShowcaseVideo(-1);
+      if (event.key === "ArrowRight") moveShowcaseVideo(1);
+      if (event.key === "ArrowUp") moveShowcaseShot(-1);
+      if (event.key === "ArrowDown") moveShowcaseShot(1);
+    });
     loadOptions().then(load);
   </script>
 </body>
