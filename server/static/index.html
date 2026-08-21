@@ -40,16 +40,19 @@
     a { color: #086b7d; }
     dialog { width: min(1280px, calc(100vw - 30px)); max-height: calc(100vh - 24px); padding: 0; border: 0; background: #101719; color: white; }
     dialog::backdrop { background: rgb(0 0 0 / 82%); }
-    .showcase { display: grid; grid-template-columns: 48px minmax(0, 1fr) 48px; align-items: center; min-height: min(620px, calc(100vh - 360px)); background: #080d0f; }
-    .showcase img { display: block; width: 100%; height: min(620px, calc(100vh - 360px)); object-fit: contain; }
+    .showcase { display: grid; grid-template-columns: 48px minmax(0, 1fr) 48px; align-items: center; min-height: min(620px, calc(100vh - 270px)); background: #080d0f; }
+    .showcase img { display: block; width: 100%; height: min(620px, calc(100vh - 270px)); object-fit: contain; }
     .showcase-nav, .close { min-height: 44px; border: 0; color: white; background: rgb(0 0 0 / 60%); font-size: 28px; }
     .close { position: absolute; top: 8px; right: 8px; z-index: 2; width: 40px; font-size: 22px; }
     .showcase-info { display: flex; justify-content: space-between; gap: 12px; padding: 8px 16px; color: #d3e0e2; font-size: 13px; }
     .showcase-actions { display: flex; gap: 6px; }
     .showcase-actions button { min-height: 30px; border: 1px solid #60777e; color: white; background: transparent; font-size: 12px; }
-    .showcase-form { display: grid; grid-template-columns: 150px 150px minmax(190px, 1fr) minmax(190px, 1fr); gap: 10px; padding: 10px 16px 16px; background: #eef2f3; color: #172126; }
-    .showcase-form label { color: #56666c; }
-    .showcase-form textarea { min-height: 58px; }
+    .showcase-form { display: grid; grid-template-columns: minmax(270px, 1fr) minmax(300px, 1.2fr) minmax(190px, 1fr) minmax(190px, 1fr); gap: 8px 12px; padding: 8px 12px 10px; background: #eef2f3; color: #172126; }
+    .showcase-form label, .showcase-choice { color: #56666c; font-size: 12px; }
+    .showcase-options { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+    .showcase-options button { min-height: 28px; border: 1px solid #b8c7cb; border-radius: 3px; color: #31444a; background: white; font-size: 12px; }
+    .showcase-options button.selected { border-color: #086b7d; color: white; background: #086b7d; }
+    .showcase-form textarea { min-height: 42px; resize: vertical; }
     .showcase-status { grid-column: 1 / -1; min-height: 17px; color: #597078; font-size: 12px; }
     .empty { padding: 44px; color: #627278; text-align: center; }
     @media (max-width: 1000px) { .toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); } header { align-items: start; gap: 10px; } }
@@ -83,8 +86,8 @@
     </div>
     <div class="showcase-info"><span><span id="showcase-name"></span> <a id="showcase-video-link" target="_blank" rel="noopener noreferrer">打开原视频</a></span><span class="showcase-actions"><button id="previous-video" type="button">上一视频</button><span id="showcase-shot-label"></span><button id="next-video" type="button">下一视频</button></span></div>
     <div class="showcase-form">
-      <label>原片类型<select id="showcase-original-type"><option value="">（空）</option><option>新片</option><option>旧片新剪</option><option>人像原片</option><option>屏幕原片</option></select></label>
-      <label>评级<select id="showcase-rating"><option>未评级</option><option>优秀</option><option>良好</option><option>合格</option><option>不合格</option><option>无需审核</option></select></label>
+      <div class="showcase-choice" id="showcase-original-type">原片类型<div class="showcase-options"><button type="button" data-value="">（空）</button><button type="button" data-value="新片">新片</button><button type="button" data-value="旧片新剪">旧片新剪</button><button type="button" data-value="人像原片">人像原片</button><button type="button" data-value="屏幕原片">屏幕原片</button></div></div>
+      <div class="showcase-choice" id="showcase-rating">评级<div class="showcase-options"><button type="button" data-value="未评级">未评级</button><button type="button" data-value="优秀">优秀</button><button type="button" data-value="良好">良好</button><button type="button" data-value="合格">合格</button><button type="button" data-value="不合格">不合格</button><button type="button" data-value="无需审核">无需审核</button></div></div>
       <label>质检备注<textarea id="showcase-note"></textarea></label>
       <label>补充<textarea id="showcase-supplement"></textarea></label>
       <span class="showcase-status" id="showcase-status"></span>
@@ -125,6 +128,14 @@
       return [Math.floor(value / 3600), Math.floor(value % 3600 / 60), value % 60].map(part => String(part).padStart(2, "0")).join(":");
     }
 
+    function choiceValue(group) {
+      return group.querySelector("button.selected")?.dataset.value || "";
+    }
+
+    function selectChoice(group, value) {
+      for (const button of group.querySelectorAll("button")) button.classList.toggle("selected", button.dataset.value === value);
+    }
+
     function updateShowcase() {
       const video = showcase.videos[showcase.videoIndex];
       if (!video) return;
@@ -134,8 +145,8 @@
       showcaseName.textContent = video.file_name;
       showcaseVideoLink.href = video.video_url;
       showcaseShotLabel.textContent = `视频 ${showcase.videoIndex + 1} / ${showcase.videos.length} · 图片 ${showcase.shotIndex + 1} / ${video.snapshots.length} · ${formatDuration(snapshot.second)}`;
-      showcaseOriginalType.value = video.review.original_type || "";
-      showcaseRating.value = video.review.rating || "未评级";
+      selectChoice(showcaseOriginalType, video.review.original_type || "");
+      selectChoice(showcaseRating, video.review.rating || "未评级");
       showcaseNote.value = video.review.review_note || "";
       showcaseSupplement.value = video.review.supplement || "";
       showcaseStatus.textContent = "";
@@ -170,7 +181,7 @@
       showcase.saving = true;
       showcaseStatus.textContent = "保存中";
       try {
-        const response = await fetch(`/api/videos/${video.video_id}/review`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ original_type: showcaseOriginalType.value, rating: showcaseRating.value, review_note: showcaseNote.value, supplement: showcaseSupplement.value, version: video.review.version }) });
+        const response = await fetch(`/api/videos/${video.video_id}/review`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ original_type: choiceValue(showcaseOriginalType), rating: choiceValue(showcaseRating), review_note: showcaseNote.value, supplement: showcaseSupplement.value, version: video.review.version }) });
         const data = await response.json();
         if (response.ok) { video.review = data; showcaseStatus.textContent = "已保存"; } else { showcaseStatus.textContent = data.detail || "保存失败，请刷新后重试"; }
       } catch (error) { showcaseStatus.textContent = "保存失败，请检查网络"; }
@@ -254,8 +265,12 @@
     document.querySelector("#next-video").addEventListener("click", () => moveShowcaseVideo(1));
     document.querySelector("#previous-shot").addEventListener("click", () => moveShowcaseShot(-1));
     document.querySelector("#next-shot").addEventListener("click", () => moveShowcaseShot(1));
-    document.querySelector("#showcase-original-type").addEventListener("change", saveShowcaseReview);
-    document.querySelector("#showcase-rating").addEventListener("change", saveShowcaseReview);
+    for (const group of [showcaseOriginalType, showcaseRating]) group.addEventListener("click", event => {
+      const button = event.target.closest("button[data-value]");
+      if (!button) return;
+      selectChoice(group, button.dataset.value);
+      saveShowcaseReview();
+    });
     document.querySelector("#showcase-note").addEventListener("blur", saveShowcaseReview);
     document.querySelector("#showcase-supplement").addEventListener("blur", saveShowcaseReview);
     viewer.querySelector(".close").addEventListener("click", () => viewer.close());
