@@ -1,0 +1,11 @@
+services:
+  openlist:
+    image: openlistteam/openlist:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5244:5244"
+    environment:
+      TZ: Asia/Shanghai
+      UMASK: "022"
+    volumes:
+      - ./data:/opt/openlist/data

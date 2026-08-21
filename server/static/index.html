@@ -62,21 +62,18 @@
       <button type="button" id="export">导出 CSV</button>
     </form>
     <div class="table-wrap">
-      <table><thead><tr><th>一级地址</th><th>二级地址</th><th>创建日期</th><th>视频名称</th><th>视频</th><th>截图</th><th>文件信息</th><th>评级</th><th>质检备注</th><th>补充</th></tr></thead><tbody id="rows"></tbody></table>
+      <table><thead><tr><th>一级地址</th><th>二级地址</th><th>创建日期</th><th>视频名称</th><th>原视频链接</th><th>截图</th><th>文件信息</th><th>评级</th><th>质检备注</th><th>补充</th></tr></thead><tbody id="rows"></tbody></table>
       <div class="empty" id="empty" hidden>没有符合条件的视频</div>
     </div>
     <div class="pager"><button id="prev" type="button">上一页</button><span id="page-label"></span><button id="next" type="button">下一页</button></div>
   </main>
   <dialog id="viewer"><button class="close" type="button" aria-label="关闭">×</button><img alt="截图原图"></dialog>
-  <dialog id="video-viewer"><button class="close" type="button" aria-label="关闭">×</button><video controls playsinline preload="metadata"></video></dialog>
   <script>
     const state = { page: 1, pageSize: 50, total: 0 };
     const filters = document.querySelector("#filters");
     const rows = document.querySelector("#rows");
     const viewer = document.querySelector("#viewer");
     const viewerImage = viewer.querySelector("img");
-    const videoViewer = document.querySelector("#video-viewer");
-    const videoPlayer = videoViewer.querySelector("video");
 
     function query(includePage = true) {
       const params = new URLSearchParams(new FormData(filters));
@@ -106,9 +103,8 @@
       name.append(document.createTextNode(video.file_name), element("br"), element("small", `批次：${video.batch}`));
       row.append(name);
       const media = element("td");
-      const videoButton = element("button", "播放视频"); videoButton.type = "button";
-      videoButton.addEventListener("click", () => { videoPlayer.src = video.video_url; videoViewer.showModal(); videoPlayer.play(); });
-      media.append(videoButton); row.append(media);
+      const videoLink = element("a", "打开原视频"); videoLink.href = video.video_url; videoLink.target = "_blank"; videoLink.rel = "noopener noreferrer";
+      media.append(videoLink); row.append(media);
       const shotsCell = element("td"); const shots = element("div", undefined, "shots");
       for (const snapshot of video.snapshots) {
         const image = element("img"); image.src = snapshot.url; image.alt = `截图 ${snapshot.sequence}`; image.title = formatDuration(snapshot.second);

@@ -1,0 +1,41 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "OpenList PoC: Run Native",
+			"type": "shell",
+			"command": "zsh deploy/openlist-poc/run-native.command",
+			"args": [],
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "OpenList PoC: Resume Native",
+			"type": "shell",
+			"command": "zsh deploy/openlist-poc/run-native.command",
+			"args": [],
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "OpenList PoC: Start Native",
+			"type": "shell",
+			"command": "zsh deploy/openlist-poc/run-native.command",
+			"args": [],
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "OpenList PoC: Start Local Only",
+			"type": "shell",
+			"command": "zsh deploy/openlist-poc/run-native.command",
+			"args": [],
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		}
+	]
+}

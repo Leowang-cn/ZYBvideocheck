@@ -9,3 +9,7 @@ __pycache__/
 输出/*
 数据/*
 !.gitkeep
+deploy/openlist-poc/openlist
+deploy/openlist-poc/openlist-*.tar.gz
+deploy/openlist-poc/data/
+deploy/openlist-poc/logs/
