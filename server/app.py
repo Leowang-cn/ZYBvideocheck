@@ -16,7 +16,8 @@ from server.config import ServerSettings
 from server.database import Review, Snapshot, Video, create_session_factory
 
 
-RATING_VALUES = ("未评级", "优秀", "良好", "合格", "不合格")
+RATING_VALUES = ("未评级", "优秀", "良好", "合格", "不合格", "无需审核")
+ORIGINAL_TYPE_VALUES = ("", "新片", "旧片新剪", "人像原片", "屏幕原片")
 
 
 class SnapshotInput(BaseModel):
@@ -45,7 +46,8 @@ class ImportPayload(BaseModel):
 
 
 class ReviewInput(BaseModel):
-    rating: Literal["未评级", "优秀", "良好", "合格", "不合格"]
+    original_type: Literal["", "新片", "旧片新剪", "人像原片", "屏幕原片"] = ""
+    rating: Literal["未评级", "优秀", "良好", "合格", "不合格", "无需审核"]
     review_note: str = Field(default="", max_length=5000)
     supplement: str = Field(default="", max_length=5000)
     reviewer: str = Field(default="", max_length=255)
@@ -202,6 +204,7 @@ def create_app(settings: Optional[ServerSettings] = None) -> FastAPI:
             session.add(review)
         elif payload.version is not None and payload.version != review.version:
             raise HTTPException(status_code=409, detail="质检结果已被其他人修改，请刷新后重试")
+        review.original_type = payload.original_type
         review.rating = payload.rating
         review.review_note = payload.review_note
         review.supplement = payload.supplement
@@ -224,7 +227,7 @@ def create_app(settings: Optional[ServerSettings] = None) -> FastAPI:
         buffer = io.StringIO()
         buffer.write("\ufeff")
         writer = csv.writer(buffer)
-        writer.writerow(["一级地址", "二级地址", "创建日期", "批次", "视频名称", "视频 URL", "截图 URL", "文件大小", "时长", "分辨率", "评级", "质检备注", "补充"])
+        writer.writerow(["一级地址", "二级地址", "创建日期", "批次", "视频名称", "视频 URL", "截图 URL", "文件大小", "时长", "分辨率", "原片类型", "评级", "质检备注", "补充"])
         for video in videos:
             review = video.review
             writer.writerow([
@@ -233,6 +236,7 @@ def create_app(settings: Optional[ServerSettings] = None) -> FastAPI:
                 _csv_safe(video.file_name), video.video_url,
                 "\n".join(snapshot.url for snapshot in video.snapshots),
                 video.file_size, video.duration, f"{video.width} × {video.height}",
+                review.original_type if review else "",
                 review.rating if review else "未评级",
                 _csv_safe(review.review_note if review else ""),
                 _csv_safe(review.supplement if review else ""),
@@ -248,11 +252,11 @@ def create_app(settings: Optional[ServerSettings] = None) -> FastAPI:
 def _review_data(review: Optional[Review]) -> dict[str, object]:
     if review is None:
         return {
-            "rating": "未评级", "review_note": "", "supplement": "",
+            "original_type": "", "rating": "未评级", "review_note": "", "supplement": "",
             "reviewer": "", "version": 0, "updated_at": None,
         }
     return {
-        "rating": review.rating, "review_note": review.review_note,
+        "original_type": review.original_type, "rating": review.rating, "review_note": review.review_note,
         "supplement": review.supplement, "reviewer": review.reviewer,
         "version": review.version, "updated_at": review.updated_at.isoformat(),
     }

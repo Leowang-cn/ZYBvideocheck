@@ -76,6 +76,7 @@ class ServerTests(unittest.TestCase):
         response = self.client.patch(
             f"/api/videos/{self.video_id}/review",
             json={
+                "original_type": "旧片新剪",
                 "rating": "合格",
                 "review_note": "+备注",
                 "supplement": "已确认",
@@ -85,17 +86,37 @@ class ServerTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["version"], 1)
+        self.assertEqual(response.json()["original_type"], "旧片新剪")
         conflict = self.client.patch(
             f"/api/videos/{self.video_id}/review",
             json={"rating": "优秀", "version": 0},
         )
         self.assertEqual(conflict.status_code, 409)
 
-        filtered = self.client.get("/api/videos", params={"rating": "合格"}).json()
+        response = self.client.patch(
+            f"/api/videos/{self.video_id}/review",
+            json={
+                "original_type": "屏幕原片",
+                "rating": "无需审核",
+                "review_note": "+备注",
+                "supplement": "已确认",
+                "reviewer": "测试员",
+                "version": 1,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["original_type"], "屏幕原片")
+        self.assertEqual(
+            self.client.get("/api/videos", params={"rating": "无需审核"}).json()["total"],
+            1,
+        )
+
+        filtered = self.client.get("/api/videos", params={"rating": "无需审核"}).json()
         self.assertEqual(filtered["total"], 1)
         csv_text = self.client.get("/api/videos/export.csv").text
         self.assertIn("'=测试视频.mp4", csv_text)
         self.assertIn("'+备注", csv_text)
+        self.assertIn("屏幕原片", csv_text)
         self.assertIn("https://example.test/snapshot-1.jpg", csv_text)
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import URL, Date, DateTime, Float, ForeignKey, Integer, String, Text, create_engine
+from sqlalchemy import URL, Date, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
 
@@ -54,6 +54,7 @@ class Review(Base):
     video_pk: Mapped[int] = mapped_column(
         ForeignKey("videos.id", ondelete="CASCADE"), unique=True
     )
+    original_type: Mapped[str] = mapped_column(String(20), default="")
     rating: Mapped[str] = mapped_column(String(20), default="未评级", index=True)
     review_note: Mapped[str] = mapped_column(Text, default="")
     supplement: Mapped[str] = mapped_column(Text, default="")
@@ -67,4 +68,11 @@ def create_session_factory(database_url: str | URL) -> sessionmaker:
     connect_args = {"check_same_thread": False} if is_sqlite else {}
     engine = create_engine(database_url, connect_args=connect_args, pool_pre_ping=True)
     Base.metadata.create_all(engine)
+    if "original_type" not in {
+        column["name"] for column in inspect(engine).get_columns("reviews")
+    }:
+        with engine.begin() as connection:
+            connection.execute(
+                text("ALTER TABLE reviews ADD COLUMN original_type VARCHAR(20) NOT NULL DEFAULT ''")
+            )
     return sessionmaker(engine, expire_on_commit=False)

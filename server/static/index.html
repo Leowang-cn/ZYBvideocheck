@@ -35,7 +35,6 @@
     .rating-good { color: #155477; border-color: #75afd0; background: #dceef8; }
     .rating-pass { color: #725500; border-color: #d4b950; background: #fff1b8; }
     .rating-fail { color: #8a2730; border-color: #d98990; background: #f9dadd; }
-    .save { width: 100%; margin-top: 7px; }
     .status { display: block; min-height: 18px; margin-top: 4px; color: #597078; font-size: 12px; }
     .pager { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 12px; }
     a { color: #086b7d; }
@@ -58,11 +57,11 @@
       <label>批次<select name="batch"><option value="">全部</option></select></label>
       <label>日期从<input name="created_from" type="date"></label>
       <label>日期至<input name="created_to" type="date"></label>
-      <label>评级<select name="rating"><option value="">全部</option><option>未评级</option><option>优秀</option><option>良好</option><option>合格</option><option>不合格</option></select></label>
+      <label>评级<select name="rating"><option value="">全部</option><option>未评级</option><option>优秀</option><option>良好</option><option>合格</option><option>不合格</option><option>无需审核</option></select></label>
       <button type="button" id="export">导出 CSV</button>
     </form>
     <div class="table-wrap">
-      <table><thead><tr><th>一级地址</th><th>二级地址</th><th>创建日期</th><th>视频名称</th><th>原视频链接</th><th>截图</th><th>文件信息</th><th>评级</th><th>质检备注</th><th>补充</th></tr></thead><tbody id="rows"></tbody></table>
+      <table><thead><tr><th>一级地址</th><th>二级地址</th><th>创建日期</th><th>视频名称</th><th>原视频链接</th><th>截图</th><th>文件信息</th><th>原片类型</th><th>评级</th><th>质检备注</th><th>补充</th></tr></thead><tbody id="rows"></tbody></table>
       <div class="empty" id="empty" hidden>没有符合条件的视频</div>
     </div>
     <div class="pager"><button id="prev" type="button">上一页</button><span id="page-label"></span><button id="next" type="button">下一页</button></div>
@@ -112,22 +111,32 @@
       }
       shotsCell.append(shots); row.append(shotsCell);
       row.append(element("td", `${(video.file_size / 1048576).toFixed(1)} MB\n${formatDuration(video.duration)}\n${video.width} × ${video.height}`, "meta"));
+      const originalTypeCell = element("td", undefined, "review"); const originalType = element("select");
+      for (const value of ["", "新片", "旧片新剪", "人像原片", "屏幕原片"]) { const option = element("option", value || "（空）"); option.value = value; originalType.append(option); }
+      originalType.value = video.review.original_type || ""; originalTypeCell.append(originalType); row.append(originalTypeCell);
       const ratingCell = element("td", undefined, "review"); const rating = element("select");
-      for (const value of ["未评级", "优秀", "良好", "合格", "不合格"]) { const option = element("option", value); option.value = value; rating.append(option); }
-      const ratingClasses = { "未评级": "rating-unrated", "优秀": "rating-excellent", "良好": "rating-good", "合格": "rating-pass", "不合格": "rating-fail" };
+      for (const value of ["未评级", "优秀", "良好", "合格", "不合格", "无需审核"]) { const option = element("option", value); option.value = value; rating.append(option); }
+      const ratingClasses = { "未评级": "rating-unrated", "优秀": "rating-excellent", "良好": "rating-good", "合格": "rating-pass", "不合格": "rating-fail", "无需审核": "rating-good" };
       function updateRatingColor() { rating.className = ratingClasses[rating.value] || "rating-unrated"; }
       rating.value = video.review.rating; updateRatingColor(); rating.addEventListener("change", updateRatingColor); ratingCell.append(rating); row.append(ratingCell);
       const noteCell = element("td"); const note = element("textarea"); note.value = video.review.review_note; noteCell.append(note); row.append(noteCell);
       const supplementCell = element("td"); const supplement = element("textarea"); supplement.value = video.review.supplement;
-      const save = element("button", "保存", "save"); save.type = "button"; const status = element("span", "", "status");
-      save.addEventListener("click", async () => {
-        save.disabled = true; status.textContent = "保存中";
-        const response = await fetch(`/api/videos/${video.video_id}/review`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rating: rating.value, review_note: note.value, supplement: supplement.value, version: video.review.version }) });
-        const data = await response.json();
-        if (response.ok) { video.review = data; status.textContent = "已保存"; } else { status.textContent = data.detail || "保存失败"; }
-        save.disabled = false;
-      });
-      supplementCell.append(supplement, save, status); row.append(supplementCell);
+      const status = element("span", "", "status");
+      let saving = false; let saveAgain = false;
+      async function saveReview() {
+        if (saving) { saveAgain = true; return; }
+        saving = true; status.textContent = "保存中";
+        try {
+          const response = await fetch(`/api/videos/${video.video_id}/review`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ original_type: originalType.value, rating: rating.value, review_note: note.value, supplement: supplement.value, version: video.review.version }) });
+          const data = await response.json();
+          if (response.ok) { video.review = data; status.textContent = "已保存"; } else { status.textContent = data.detail || "保存失败，请刷新后重试"; }
+        } catch (error) { status.textContent = "保存失败，请检查网络"; }
+        saving = false;
+        if (saveAgain) { saveAgain = false; saveReview(); }
+      }
+      originalType.addEventListener("change", saveReview); rating.addEventListener("change", saveReview); note.addEventListener("blur", saveReview); supplement.addEventListener("blur", saveReview);
+      noteCell.append(note, status); row.append(noteCell);
+      supplementCell.append(supplement); row.append(supplementCell);
       return row;
     }
 

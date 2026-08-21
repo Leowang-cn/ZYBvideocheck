@@ -129,13 +129,13 @@ def export_html(
       <label>筛选批次<select id="batch-filter"><option value="">全部批次</option>{batch_options}</select></label>
       <label>创建时间从<input id="created-from" type="date"></label>
       <label>创建时间至<input id="created-to" type="date"></label>
-      <label>筛选评级<select id="rating-filter"><option value="">全部评级</option><option value="未评级">未评级</option><option>优秀</option><option>良好</option><option>合格</option><option>不合格</option></select></label>
+      <label>筛选评级<select id="rating-filter"><option value="">全部评级</option><option value="未评级">未评级</option><option>优秀</option><option>良好</option><option>合格</option><option>不合格</option><option>无需审核</option></select></label>
       <button id="export-csv" type="button">导出 CSV</button>
       <span class="count" id="count">显示 {len(records)} / {len(records)} 条</span>
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>一级地址</th><th>二级地址</th><th>创建时间</th><th>视频名称</th><th>原视频链接</th><th>截图</th><th>文件信息</th><th>评级</th><th>质检备注</th><th>补充</th></tr></thead>
+        <thead><tr><th>一级地址</th><th>二级地址</th><th>创建时间</th><th>视频名称</th><th>原视频链接</th><th>截图</th><th>文件信息</th><th>原片类型</th><th>评级</th><th>质检备注</th><th>补充</th></tr></thead>
         <tbody>{rows}</tbody>
       </table>
     </div>
@@ -194,7 +194,7 @@ def export_html(
       return `"${{protectedText.replaceAll('"', '""')}}"`;
     }}
     document.querySelector("#export-csv").addEventListener("click", () => {{
-      const header = ["一级地址", "二级地址", "创建日期", "批次", "视频名称", "视频 URL", "截图 URL", "文件大小", "时长", "分辨率", "评级", "质检备注", "补充"];
+      const header = ["一级地址", "二级地址", "创建日期", "批次", "视频名称", "视频 URL", "截图 URL", "文件大小", "时长", "分辨率", "原片类型", "评级", "质检备注", "补充"];
       const data = rows.filter(row => !row.hidden).map(row => [
         row.dataset.firstLevel,
         row.dataset.secondLevel,
@@ -206,6 +206,7 @@ def export_html(
         row.dataset.fileSize,
         row.dataset.duration,
         row.dataset.resolution,
+        row.querySelector('[aria-label="原片类型"]').value,
         row.querySelector('[aria-label="评级"]').value || "未评级",
         row.querySelector('[aria-label="质检备注"]').value,
         row.querySelector('[aria-label="补充"]').value,
@@ -280,7 +281,8 @@ def _record_row(
   <td><a class="video-link" href="{escape(video_url, quote=True)}" target="_blank">打开原视频</a></td>
   <td><div class="snapshots">{''.join(snapshots)}</div></td>
   <td class="meta">{format_size(record.file_size)}<br>{format_duration(record.duration)}<br>{record.width} × {record.height}</td>
-  <td><select aria-label="评级"><option></option><option>优秀</option><option>良好</option><option>合格</option><option>不合格</option></select></td>
+  <td><select aria-label="原片类型"><option value=""></option><option>新片</option><option>旧片新剪</option><option>人像原片</option><option>屏幕原片</option></select></td>
+  <td><select aria-label="评级"><option>未评级</option><option>优秀</option><option>良好</option><option>合格</option><option>不合格</option><option>无需审核</option></select></td>
   <td><textarea aria-label="质检备注"></textarea></td>
   <td><textarea aria-label="补充"></textarea></td>
 </tr>"""
