@@ -293,8 +293,14 @@
     showcaseNote.addEventListener("input", updatePhraseChoices);
     document.querySelector("#showcase-note").addEventListener("blur", saveShowcaseReview);
     document.querySelector("#showcase-supplement").addEventListener("blur", saveShowcaseReview);
-    viewer.querySelector(".close").addEventListener("click", () => viewer.close());
-    viewer.addEventListener("click", event => { if (event.target === viewer) viewer.close(); });
+    async function closeShowcase() {
+      viewer.close();
+      await load();
+    }
+
+    viewer.querySelector(".close").addEventListener("click", closeShowcase);
+    viewer.addEventListener("click", event => { if (event.target === viewer) closeShowcase(); });
+    viewer.addEventListener("cancel", event => { event.preventDefault(); closeShowcase(); });
     viewer.addEventListener("keydown", event => {
       if (event.key === "ArrowLeft") moveShowcaseVideo(-1);
       if (event.key === "ArrowRight") moveShowcaseVideo(1);
