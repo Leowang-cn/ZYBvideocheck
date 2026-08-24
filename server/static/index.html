@@ -38,10 +38,10 @@
     .status { display: block; min-height: 18px; margin-top: 4px; color: #597078; font-size: 12px; }
     .pager { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 12px; }
     a { color: #086b7d; }
-    dialog { width: min(1280px, calc(100vw - 30px)); max-height: calc(100vh - 24px); padding: 0; border: 0; background: #101719; color: white; }
+    dialog { width: min(1920px, calc(100vw - 16px)); max-width: none; max-height: calc(100vh - 12px); padding: 0; border: 0; background: #101719; color: white; }
     dialog::backdrop { background: rgb(0 0 0 / 82%); }
-    .showcase { display: grid; grid-template-columns: 48px minmax(0, 1fr) 48px; align-items: center; min-height: min(620px, calc(100vh - 270px)); background: #080d0f; }
-    .showcase img { display: block; width: 100%; height: min(620px, calc(100vh - 270px)); object-fit: contain; }
+    .showcase { display: grid; grid-template-columns: 56px minmax(0, 1fr) 56px; align-items: center; min-height: min(930px, calc(100vh - 280px)); background: #080d0f; }
+    .showcase img { display: block; width: 100%; height: min(930px, calc(100vh - 280px)); object-fit: contain; }
     .showcase-nav, .close { min-height: 44px; border: 0; color: white; background: rgb(0 0 0 / 60%); font-size: 28px; }
     .close { position: absolute; top: 8px; right: 8px; z-index: 2; width: 40px; font-size: 22px; }
     .showcase-info { display: flex; justify-content: space-between; gap: 12px; padding: 8px 16px; color: #d3e0e2; font-size: 13px; }
@@ -53,6 +53,10 @@
     .showcase-options button { min-height: 28px; border: 1px solid #b8c7cb; border-radius: 3px; color: #31444a; background: white; font-size: 12px; }
     .showcase-options button.selected { border-color: #086b7d; color: white; background: #086b7d; }
     .showcase-form textarea { min-height: 42px; resize: vertical; }
+    .showcase-note-field { display: grid; gap: 4px; }
+    .showcase-phrases { display: flex; flex-wrap: wrap; gap: 4px; }
+    .showcase-phrases button { min-height: 25px; padding: 3px 7px; border: 1px solid #b8c7cb; border-radius: 3px; color: #42575d; background: #f8fbfc; font-size: 11px; }
+    .showcase-phrases button.selected { border-color: #b66b22; color: #713d0c; background: #ffe4c7; }
     .showcase-status { grid-column: 1 / -1; min-height: 17px; color: #597078; font-size: 12px; }
     .empty { padding: 44px; color: #627278; text-align: center; }
     @media (max-width: 1000px) { .toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); } header { align-items: start; gap: 10px; } }
@@ -86,9 +90,9 @@
     </div>
     <div class="showcase-info"><span><span id="showcase-name"></span> <a id="showcase-video-link" target="_blank" rel="noopener noreferrer">打开原视频</a></span><span class="showcase-actions"><button id="previous-video" type="button">上一视频</button><span id="showcase-shot-label"></span><button id="next-video" type="button">下一视频</button></span></div>
     <div class="showcase-form">
-      <div class="showcase-choice" id="showcase-original-type">原片类型<div class="showcase-options"><button type="button" data-value="">（空）</button><button type="button" data-value="新片">新片</button><button type="button" data-value="旧片新剪">旧片新剪</button><button type="button" data-value="人像原片">人像原片</button><button type="button" data-value="屏幕原片">屏幕原片</button></div></div>
-      <div class="showcase-choice" id="showcase-rating">评级<div class="showcase-options"><button type="button" data-value="未评级">未评级</button><button type="button" data-value="优秀">优秀</button><button type="button" data-value="良好">良好</button><button type="button" data-value="合格">合格</button><button type="button" data-value="不合格">不合格</button><button type="button" data-value="无需审核">无需审核</button></div></div>
-      <label>质检备注<textarea id="showcase-note"></textarea></label>
+      <div class="showcase-choice" id="showcase-original-type">原片类型<div class="showcase-options"><button type="button" data-value="新片">新片</button><button type="button" data-value="旧片新剪">旧片新剪</button><button type="button" data-value="人像原片">人像原片</button><button type="button" data-value="屏幕原片">屏幕原片</button></div></div>
+      <div class="showcase-choice" id="showcase-rating">评级<div class="showcase-options"><button type="button" data-value="优秀">优秀</button><button type="button" data-value="良好">良好</button><button type="button" data-value="合格">合格</button><button type="button" data-value="不合格">不合格</button><button type="button" data-value="无需审核">无需审核</button></div></div>
+      <label class="showcase-note-field">质检备注<textarea id="showcase-note"></textarea><span class="showcase-phrases" id="showcase-phrases"><button type="button">人像偏黄</button><button type="button">人像偏暗</button><button type="button">人像泛绿</button><button type="button">人像模糊</button><button type="button">人像和课件不统一</button><button type="button">头发边缘锯齿</button><button type="button">人像边缘有粗边</button></span></label>
       <label>补充<textarea id="showcase-supplement"></textarea></label>
       <span class="showcase-status" id="showcase-status"></span>
     </div>
@@ -105,6 +109,7 @@
     const showcaseOriginalType = document.querySelector("#showcase-original-type");
     const showcaseRating = document.querySelector("#showcase-rating");
     const showcaseNote = document.querySelector("#showcase-note");
+    const showcasePhrases = document.querySelector("#showcase-phrases");
     const showcaseSupplement = document.querySelector("#showcase-supplement");
     const showcaseStatus = document.querySelector("#showcase-status");
     const showcase = { videos: [], videoIndex: 0, shotIndex: 0, saving: false, saveAgain: false };
@@ -136,6 +141,11 @@
       for (const button of group.querySelectorAll("button")) button.classList.toggle("selected", button.dataset.value === value);
     }
 
+    function updatePhraseChoices() {
+      const note = showcaseNote.value;
+      for (const button of showcasePhrases.querySelectorAll("button")) button.classList.toggle("selected", note.includes(button.textContent));
+    }
+
     function updateShowcase() {
       const video = showcase.videos[showcase.videoIndex];
       if (!video) return;
@@ -148,6 +158,7 @@
       selectChoice(showcaseOriginalType, video.review.original_type || "");
       selectChoice(showcaseRating, video.review.rating || "未评级");
       showcaseNote.value = video.review.review_note || "";
+      updatePhraseChoices();
       showcaseSupplement.value = video.review.supplement || "";
       showcaseStatus.textContent = "";
     }
@@ -181,7 +192,7 @@
       showcase.saving = true;
       showcaseStatus.textContent = "保存中";
       try {
-        const response = await fetch(`/api/videos/${video.video_id}/review`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ original_type: choiceValue(showcaseOriginalType), rating: choiceValue(showcaseRating), review_note: showcaseNote.value, supplement: showcaseSupplement.value, version: video.review.version }) });
+        const response = await fetch(`/api/videos/${video.video_id}/review`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ original_type: choiceValue(showcaseOriginalType), rating: choiceValue(showcaseRating) || "未评级", review_note: showcaseNote.value, supplement: showcaseSupplement.value, version: video.review.version }) });
         const data = await response.json();
         if (response.ok) { video.review = data; showcaseStatus.textContent = "已保存"; } else { showcaseStatus.textContent = data.detail || "保存失败，请刷新后重试"; }
       } catch (error) { showcaseStatus.textContent = "保存失败，请检查网络"; }
@@ -271,6 +282,15 @@
       selectChoice(group, button.dataset.value);
       saveShowcaseReview();
     });
+    showcasePhrases.addEventListener("click", event => {
+      const button = event.target.closest("button");
+      if (!button || showcaseNote.value.includes(button.textContent)) return;
+      const separator = showcaseNote.value.trim() ? "；" : "";
+      showcaseNote.value = `${showcaseNote.value.trim()}${separator}${button.textContent}`;
+      updatePhraseChoices();
+      saveShowcaseReview();
+    });
+    showcaseNote.addEventListener("input", updatePhraseChoices);
     document.querySelector("#showcase-note").addEventListener("blur", saveShowcaseReview);
     document.querySelector("#showcase-supplement").addEventListener("blur", saveShowcaseReview);
     viewer.querySelector(".close").addEventListener("click", () => viewer.close());
