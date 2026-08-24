@@ -71,6 +71,10 @@ def create_app(settings: Optional[ServerSettings] = None) -> FastAPI:
     def index() -> FileResponse:
         return FileResponse(Path(__file__).with_name("static") / "index.html")
 
+    @application.get("/statistics", include_in_schema=False)
+    def statistics_page() -> FileResponse:
+        return FileResponse(Path(__file__).with_name("static") / "statistics.html")
+
     @application.get("/api/health")
     def health(session: Session = Depends(database)) -> dict[str, str]:
         session.execute(select(1))
@@ -185,6 +189,78 @@ def create_app(settings: Optional[ServerSettings] = None) -> FastAPI:
             "level_1": values(Video.level_1),
             "level_2": values(Video.level_2),
             "batch": values(Video.batch),
+        }
+
+    @application.get("/api/statistics/overview")
+    def statistics_overview(
+        filters: dict[str, object] = Depends(query_parameters),
+        session: Session = Depends(database),
+    ) -> dict[str, object]:
+        videos = session.scalars(
+            filtered_query(**filters)
+            .options(selectinload(Video.review))
+            .order_by(Video.created_date, Video.id)
+        ).all()
+        ratings = {value: 0 for value in RATING_VALUES}
+        original_types = {value: 0 for value in ORIGINAL_TYPE_VALUES if value}
+        batches: dict[str, dict[str, object]] = {}
+        issues = {
+            value: 0 for value in (
+                "人像偏黄", "人像偏暗", "人像泛绿", "人像模糊",
+                "人像和课件不统一", "头发边缘锯齿", "人像边缘有粗边",
+            )
+        }
+        reviewed = 0
+        reviewed_duration = 0.0
+        noted = 0
+        for video in videos:
+            review = video.review
+            rating = review.rating if review else "未评级"
+            ratings[rating] = ratings.get(rating, 0) + 1
+            is_reviewed = rating != "未评级"
+            if is_reviewed:
+                reviewed += 1
+                reviewed_duration += video.duration
+            original_type = review.original_type if review else ""
+            if original_type:
+                original_types[original_type] = original_types.get(original_type, 0) + 1
+            note = review.review_note if review else ""
+            if note:
+                noted += 1
+                for issue in issues:
+                    if issue in note:
+                        issues[issue] += 1
+            batch = batches.setdefault(
+                video.batch,
+                {"batch": video.batch, "total": 0, "reviewed": 0, "failed": 0},
+            )
+            batch["total"] += 1
+            batch["reviewed"] += int(is_reviewed)
+            batch["failed"] += int(rating == "不合格")
+
+        total = len(videos)
+        batch_items = sorted(batches.values(), key=lambda item: (-item["total"], item["batch"]))
+        for item in batch_items:
+            item["completion_rate"] = round(item["reviewed"] / item["total"] * 100, 1)
+        return {
+            "summary": {
+                "total": total,
+                "reviewed": reviewed,
+                "unreviewed": total - reviewed,
+                "completion_rate": round(reviewed / total * 100, 1) if total else 0.0,
+                "noted": noted,
+                "total_duration": sum(video.duration for video in videos),
+                "reviewed_duration": reviewed_duration,
+            },
+            "ratings": [{"name": name, "count": count} for name, count in ratings.items()],
+            "original_types": [
+                {"name": name, "count": count} for name, count in original_types.items()
+            ],
+            "batches": batch_items,
+            "issues": [
+                {"name": name, "count": count}
+                for name, count in sorted(issues.items(), key=lambda item: (-item[1], item[0]))
+            ],
         }
 
     @application.patch("/api/videos/{video_id}/review")

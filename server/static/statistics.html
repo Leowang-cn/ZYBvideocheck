@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>统计分析 - 视频走查</title>
+  <style>
+    :root { color-scheme: light; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; color: #172126; background: #eef2f3; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header { display: flex; justify-content: space-between; align-items: end; gap: 16px; padding: 20px 24px; color: white; background: #153f4a; }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: 22px; }
+    header p { margin-top: 5px; color: #cfe1e4; font-size: 13px; }
+    header a, .link { color: #d8f0ed; }
+    main { max-width: 1500px; margin: 0 auto; padding: 18px 20px 32px; }
+    .filters { display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)) auto; gap: 10px; align-items: end; margin-bottom: 16px; }
+    label { display: grid; gap: 5px; color: #56666c; font-size: 12px; }
+    select, input, button { min-height: 36px; border: 1px solid #b8c5c9; background: white; font: inherit; }
+    select, input { width: 100%; padding: 7px 9px; }
+    button { padding: 7px 12px; color: #153f4a; cursor: pointer; font-weight: 600; }
+    .summary { display: grid; grid-template-columns: repeat(6, minmax(130px, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .metric, .panel { border: 1px solid #d5dee0; background: white; }
+    .metric { padding: 14px 16px; }
+    .metric strong { display: block; margin-top: 5px; color: #153f4a; font-size: 25px; }
+    .metric span { color: #627278; font-size: 12px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .panel { padding: 16px; }
+    h2 { margin-bottom: 14px; color: #33474e; font-size: 16px; }
+    .bar { display: grid; grid-template-columns: 90px minmax(80px, 1fr) 42px; gap: 8px; align-items: center; margin: 10px 0; color: #53666d; font-size: 13px; }
+    .track { height: 12px; overflow: hidden; background: #e4ecee; }
+    .fill { height: 100%; min-width: 2px; background: #22808b; }
+    .bar button { min-height: auto; padding: 0; border: 0; color: #086b7d; background: transparent; text-align: left; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 9px 8px; border-bottom: 1px solid #dce3e5; text-align: left; font-size: 13px; }
+    th { color: #53666d; font-weight: 600; }
+    td:last-child, th:last-child { text-align: right; }
+    .progress { height: 8px; margin-top: 5px; background: #e4ecee; }
+    .progress i { display: block; height: 100%; background: #22808b; }
+    .error { color: #a52d36; }
+    @media (max-width: 900px) { .summary { grid-template-columns: repeat(3, 1fr); } .filters { grid-template-columns: repeat(2, 1fr); } .grid { grid-template-columns: 1fr; } }
+    @media (max-width: 520px) { .summary { grid-template-columns: repeat(2, 1fr); } header { align-items: start; flex-direction: column; } }
+  </style>
+</head>
+<body>
+  <header><div><h1>统计分析</h1><p>审核进度与质量分布</p></div><a href="/">返回视频列表</a></header>
+  <main>
+    <form class="filters" id="filters">
+      <label>一级地址<select name="level_1"><option value="">全部</option></select></label>
+      <label>二级地址<select name="level_2"><option value="">全部</option></select></label>
+      <label>批次<select name="batch"><option value="">全部</option></select></label>
+      <label>日期从<input name="created_from" type="date"></label>
+      <label>日期至<input name="created_to" type="date"></label>
+      <button type="submit">更新统计</button>
+    </form>
+    <section class="summary" id="summary"></section>
+    <div class="grid">
+      <section class="panel"><h2>评级分布</h2><div id="ratings"></div></section>
+      <section class="panel"><h2>原片类型</h2><div id="original-types"></div></section>
+    </div>
+    <div class="grid">
+      <section class="panel"><h2>批次完成度</h2><div id="batches"></div></section>
+      <section class="panel"><h2>常见质检问题</h2><div id="issues"></div></section>
+    </div>
+    <p id="status"></p>
+  </main>
+  <script>
+    const filters = document.querySelector("#filters");
+    const status = document.querySelector("#status");
+    const ratingColors = { "优秀": "#27824f", "良好": "#287c9c", "合格": "#bd8b1c", "不合格": "#b63842", "无需审核": "#7a6aa6", "未评级": "#9aa8ac" };
+    const params = () => { const value = new URLSearchParams(new FormData(filters)); for (const [key, item] of [...value]) if (!item) value.delete(key); return value; };
+    const formatDuration = value => { const seconds = Math.round(value); return `${Math.floor(seconds / 3600)}小时${Math.floor(seconds % 3600 / 60)}分`; };
+    const linkToList = (name, field) => { const url = new URL("/", location.origin); url.searchParams.set(field, name); return url.href; };
+    function renderBars(target, items, field) {
+      target.replaceChildren();
+      const maximum = Math.max(1, ...items.map(item => item.count));
+      for (const item of items) {
+        const row = document.createElement("div"); row.className = "bar";
+        const link = document.createElement(field ? "a" : "span"); link.textContent = item.name;
+        if (field) { link.className = "link"; link.href = linkToList(item.name, field); }
+        const track = document.createElement("div"); track.className = "track";
+        const fill = document.createElement("div"); fill.className = "fill"; fill.style.width = `${item.count / maximum * 100}%`; fill.style.background = ratingColors[item.name] || "#22808b"; track.append(fill);
+        const count = document.createElement("strong"); count.textContent = item.count;
+        row.append(link, track, count); target.append(row);
+      }
+    }
+    function renderBatches(items) {
+      const table = document.createElement("table"); table.innerHTML = "<thead><tr><th>批次</th><th>进度</th><th>不合格</th></tr></thead>";
+      const body = document.createElement("tbody");
+      for (const item of items) { const row = document.createElement("tr"); row.innerHTML = `<td><a class="link" href="${linkToList(item.batch, "batch")}">${item.batch}</a></td><td>${item.reviewed} / ${item.total}<div class="progress"><i style="width:${item.completion_rate}%"></i></div></td><td class="${item.failed ? "error" : ""}">${item.failed}</td>`; body.append(row); }
+      table.append(body); document.querySelector("#batches").replaceChildren(table);
+    }
+    async function loadOptions() { const data = await (await fetch("/api/videos/options")).json(); for (const field of ["level_1", "level_2", "batch"]) for (const value of data[field]) { const option = document.createElement("option"); option.value = value; option.textContent = value || "（空）"; filters.elements[field].append(option); } }
+    async function load() {
+      status.textContent = "正在读取统计";
+      const data = await (await fetch(`/api/statistics/overview?${params()}`)).json();
+      const summary = data.summary;
+      document.querySelector("#summary").innerHTML = [["视频总数", summary.total], ["已审核", summary.reviewed], ["未审核", summary.unreviewed], ["完成率", `${summary.completion_rate}%`], ["有备注", summary.noted], ["总时长", formatDuration(summary.total_duration)]].map(item => `<div class="metric"><span>${item[0]}</span><strong>${item[1]}</strong></div>`).join("");
+      renderBars(document.querySelector("#ratings"), data.ratings, "rating"); renderBars(document.querySelector("#original-types"), data.original_types); renderBars(document.querySelector("#issues"), data.issues); renderBatches(data.batches); status.textContent = `统计范围内共 ${summary.total} 条视频`;
+    }
+    filters.addEventListener("submit", event => { event.preventDefault(); load().catch(error => { status.className = "error"; status.textContent = "统计加载失败，请检查网络"; }); });
+    loadOptions().then(load).catch(() => { status.className = "error"; status.textContent = "统计加载失败，请检查网络"; });
+  </script>
+</body>
+</html>

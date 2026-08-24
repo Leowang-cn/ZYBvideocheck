@@ -119,6 +119,40 @@ class ServerTests(unittest.TestCase):
         self.assertIn("屏幕原片", csv_text)
         self.assertIn("https://example.test/snapshot-1.jpg", csv_text)
 
+    def test_statistics_summarizes_review_progress_and_issues(self) -> None:
+        self.import_video()
+        second_video = dict(self.payload["videos"][0])
+        second_video["video_id"] = "b" * 64
+        second_video["file_name"] = "第二条视频.mp4"
+        self.client.post(
+            "/api/videos/import",
+            json={"videos": [second_video]},
+            headers={"Authorization": "Bearer test-token"},
+        )
+        self.client.patch(
+            f"/api/videos/{self.video_id}/review",
+            json={
+                "original_type": "人像原片",
+                "rating": "不合格",
+                "review_note": "人像偏黄；人像模糊",
+                "version": 0,
+            },
+        )
+
+        self.assertIn("统计分析", self.client.get("/statistics").text)
+        result = self.client.get("/api/statistics/overview").json()
+        self.assertEqual(result["summary"]["total"], 2)
+        self.assertEqual(result["summary"]["reviewed"], 1)
+        self.assertEqual(result["summary"]["unreviewed"], 1)
+        self.assertEqual(result["summary"]["completion_rate"], 50.0)
+        self.assertEqual(result["batches"][0]["failed"], 1)
+        ratings = {item["name"]: item["count"] for item in result["ratings"]}
+        issues = {item["name"]: item["count"] for item in result["issues"]}
+        self.assertEqual(ratings["不合格"], 1)
+        self.assertEqual(ratings["未评级"], 1)
+        self.assertEqual(issues["人像偏黄"], 1)
+        self.assertEqual(issues["人像模糊"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
