@@ -14,11 +14,16 @@
     header p { margin-top: 5px; color: #cfe1e4; font-size: 13px; }
     header a, .link { color: #d8f0ed; }
     main { max-width: 1500px; margin: 0 auto; padding: 18px 20px 32px; }
-    .filters { display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)) auto; gap: 10px; align-items: end; margin-bottom: 16px; }
+    .filters { display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)) auto; gap: 10px; align-items: end; margin-bottom: 10px; }
     label { display: grid; gap: 5px; color: #56666c; font-size: 12px; }
     select, input, button { min-height: 36px; border: 1px solid #b8c5c9; background: white; font: inherit; }
     select, input { width: 100%; padding: 7px 9px; }
     button { padding: 7px 12px; color: #153f4a; cursor: pointer; font-weight: 600; }
+    .type-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 16px; padding: 10px 12px; border: 1px solid #d5dee0; background: white; }
+    .type-filter > span { margin-right: 4px; color: #56666c; font-size: 12px; }
+    .type-filter label { display: inline-flex; grid: none; align-items: center; gap: 5px; min-height: 30px; padding: 4px 9px; border: 1px solid #b8c5c9; color: #33474e; background: #f8fbfc; cursor: pointer; }
+    .type-filter label:has(input:checked) { border-color: #087184; color: #075564; background: #dceff2; }
+    .type-filter input { width: 14px; min-height: auto; margin: 0; }
     .summary { display: grid; grid-template-columns: repeat(6, minmax(130px, 1fr)); gap: 10px; margin-bottom: 16px; }
     .metric, .panel { border: 1px solid #d5dee0; background: white; }
     .metric { padding: 14px 16px; }
@@ -27,6 +32,10 @@
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
     .panel { padding: 16px; }
     h2 { margin-bottom: 14px; color: #33474e; font-size: 16px; }
+    .rating-layout { display: grid; grid-template-columns: minmax(180px, .8fr) minmax(260px, 1.2fr); gap: 20px; align-items: center; }
+    .pie { width: min(220px, 100%); aspect-ratio: 1; margin: 0 auto; border-radius: 50%; background: #e4ecee; }
+    .rating-table td:first-child { display: flex; align-items: center; gap: 7px; }
+    .swatch { width: 10px; height: 10px; flex: 0 0 auto; }
     .bar { display: grid; grid-template-columns: 90px minmax(80px, 1fr) 42px; gap: 8px; align-items: center; margin: 10px 0; color: #53666d; font-size: 13px; }
     .track { height: 12px; overflow: hidden; background: #e4ecee; }
     .fill { height: 100%; min-width: 2px; background: #22808b; }
@@ -37,8 +46,25 @@
     td:last-child, th:last-child { text-align: right; }
     .progress { height: 8px; margin-top: 5px; background: #e4ecee; }
     .progress i { display: block; height: 100%; background: #22808b; }
+    .issue-list { display: flex; flex-wrap: wrap; gap: 7px; }
+    .issue-list button { min-height: 32px; border-color: #c4d0d3; font-size: 12px; }
+    .issue-list button.selected { border-color: #a34b2c; color: #7f3018; background: #ffe1d5; }
+    .issue-list button span { margin-left: 5px; color: #728187; font-weight: 400; }
+    .video-panel { margin-top: 16px; }
+    .video-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .video-heading span { color: #627278; font-size: 12px; }
+    .video-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .video-card { min-width: 0; border: 1px solid #d5dee0; background: #f8fbfc; }
+    .video-card .preview { display: flex; gap: 3px; overflow-x: auto; padding: 6px; background: #142025; }
+    .video-card img { width: 100%; min-width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #0b1114; }
+    .video-info { padding: 10px 12px 12px; }
+    .video-info h3 { margin: 0 0 7px; overflow-wrap: anywhere; color: #25383e; font-size: 14px; }
+    .video-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; color: #5c6d73; font-size: 12px; }
+    .video-note { margin: 8px 0; padding: 7px 8px; color: #5b3b27; background: #fff3e8; font-size: 12px; white-space: pre-wrap; }
     .error { color: #a52d36; }
+    @media (max-width: 1000px) { .video-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 900px) { .summary { grid-template-columns: repeat(3, 1fr); } .filters { grid-template-columns: repeat(2, 1fr); } .grid { grid-template-columns: 1fr; } }
+    @media (max-width: 620px) { .rating-layout, .video-grid { grid-template-columns: 1fr; } }
     @media (max-width: 520px) { .summary { grid-template-columns: repeat(2, 1fr); } header { align-items: start; flex-direction: column; } }
   </style>
 </head>
@@ -53,21 +79,24 @@
       <label>日期至<input name="created_to" type="date"></label>
       <button type="submit">更新统计</button>
     </form>
+    <div class="type-filter"><span>原片类型（多选）</span><label><input type="checkbox" name="original_type" value="新片" form="filters">新片</label><label><input type="checkbox" name="original_type" value="旧片新剪" form="filters">旧片新剪</label><label><input type="checkbox" name="original_type" value="人像原片" form="filters">人像原片</label><label><input type="checkbox" name="original_type" value="屏幕原片" form="filters">屏幕原片</label></div>
     <section class="summary" id="summary"></section>
     <div class="grid">
-      <section class="panel"><h2>评级分布</h2><div id="ratings"></div></section>
+      <section class="panel"><h2>评级分布</h2><div class="rating-layout"><div class="pie" id="rating-pie"></div><div id="ratings"></div></div></section>
       <section class="panel"><h2>原片类型</h2><div id="original-types"></div></section>
     </div>
     <div class="grid">
       <section class="panel"><h2>批次完成度</h2><div id="batches"></div></section>
-      <section class="panel"><h2>常见质检问题</h2><div id="issues"></div></section>
+      <section class="panel"><h2>质检问题</h2><div class="issue-list" id="issues"></div></section>
     </div>
+    <section class="panel video-panel"><div class="video-heading"><h2 id="video-title">问题视频</h2><span id="video-count">请选择上方质检问题</span></div><div class="video-grid" id="issue-videos"></div></section>
     <p id="status"></p>
   </main>
   <script>
     const filters = document.querySelector("#filters");
     const status = document.querySelector("#status");
     const ratingColors = { "优秀": "#27824f", "良好": "#287c9c", "合格": "#bd8b1c", "不合格": "#b63842", "无需审核": "#7a6aa6", "未评级": "#9aa8ac" };
+    let selectedIssue = "";
     const params = () => { const value = new URLSearchParams(new FormData(filters)); for (const [key, item] of [...value]) if (!item) value.delete(key); return value; };
     const formatDuration = value => { const seconds = Math.round(value); return `${Math.floor(seconds / 3600)}小时${Math.floor(seconds % 3600 / 60)}分`; };
     const linkToList = (name, field) => { const url = new URL("/", location.origin); url.searchParams.set(field, name); return url.href; };
@@ -84,11 +113,56 @@
         row.append(link, track, count); target.append(row);
       }
     }
+    function renderRatings(items) {
+      const total = items.reduce((sum, item) => sum + item.count, 0);
+      let current = 0;
+      const stops = items.filter(item => item.count).map(item => { const start = current; current += item.count / total * 100; return `${ratingColors[item.name]} ${start}% ${current}%`; });
+      document.querySelector("#rating-pie").style.background = stops.length ? `conic-gradient(${stops.join(",")})` : "#e4ecee";
+      const table = document.createElement("table"); table.className = "rating-table"; table.innerHTML = "<thead><tr><th>评级</th><th>数量</th><th>占比</th></tr></thead>";
+      const body = document.createElement("tbody");
+      for (const item of items) {
+        const row = document.createElement("tr");
+        const name = document.createElement("td"); const swatch = document.createElement("i"); swatch.className = "swatch"; swatch.style.background = ratingColors[item.name]; const link = document.createElement("a"); link.className = "link"; link.href = linkToList(item.name, "rating"); link.textContent = item.name; name.append(swatch, link);
+        const count = document.createElement("td"); count.textContent = item.count; const percent = document.createElement("td"); percent.textContent = `${total ? (item.count / total * 100).toFixed(1) : "0.0"}%`;
+        row.append(name, count, percent); body.append(row);
+      }
+      table.append(body); document.querySelector("#ratings").replaceChildren(table);
+    }
     function renderBatches(items) {
       const table = document.createElement("table"); table.innerHTML = "<thead><tr><th>批次</th><th>进度</th><th>不合格</th></tr></thead>";
       const body = document.createElement("tbody");
       for (const item of items) { const row = document.createElement("tr"); row.innerHTML = `<td><a class="link" href="${linkToList(item.batch, "batch")}">${item.batch}</a></td><td>${item.reviewed} / ${item.total}<div class="progress"><i style="width:${item.completion_rate}%"></i></div></td><td class="${item.failed ? "error" : ""}">${item.failed}</td>`; body.append(row); }
       table.append(body); document.querySelector("#batches").replaceChildren(table);
+    }
+    function renderIssues(items) {
+      const target = document.querySelector("#issues"); target.replaceChildren();
+      for (const item of items) {
+        const button = document.createElement("button"); button.type = "button"; button.classList.toggle("selected", item.name === selectedIssue); button.append(document.createTextNode(item.name));
+        const count = document.createElement("span"); count.textContent = item.count; button.append(count);
+        button.addEventListener("click", () => { selectedIssue = item.name; for (const choice of target.querySelectorAll("button")) choice.classList.toggle("selected", choice === button); loadIssueVideos(); });
+        target.append(button);
+      }
+    }
+    function renderIssueVideos(data) {
+      document.querySelector("#video-title").textContent = selectedIssue ? `问题视频：${selectedIssue}` : "问题视频";
+      document.querySelector("#video-count").textContent = selectedIssue ? `共 ${data.total} 条` : "请选择上方质检问题";
+      const target = document.querySelector("#issue-videos"); target.replaceChildren();
+      for (const video of data.items) {
+        const card = document.createElement("article"); card.className = "video-card";
+        const preview = document.createElement("div"); preview.className = "preview";
+        for (const snapshot of video.snapshots) { const image = document.createElement("img"); image.src = snapshot.url; image.alt = `${video.file_name} 截图 ${snapshot.sequence}`; image.loading = "lazy"; preview.append(image); }
+        const info = document.createElement("div"); info.className = "video-info"; const title = document.createElement("h3"); title.textContent = video.file_name;
+        const meta = document.createElement("div"); meta.className = "video-meta";
+        for (const value of [`${video.level_1} / ${video.level_2}`, `批次：${video.batch}`, `日期：${video.created_date}`, `时长：${formatDuration(video.duration)}`, `${video.width} × ${video.height}`, `${video.review.original_type || "未标类型"} · ${video.review.rating}`]) { const span = document.createElement("span"); span.textContent = value; meta.append(span); }
+        const note = document.createElement("p"); note.className = "video-note"; note.textContent = video.review.review_note;
+        const link = document.createElement("a"); link.href = video.video_url; link.target = "_blank"; link.rel = "noopener noreferrer"; link.textContent = "打开原视频";
+        info.append(title, meta, note, link); card.append(preview, info); target.append(card);
+      }
+      if (!data.items.length && selectedIssue) { const empty = document.createElement("p"); empty.textContent = "当前筛选范围内没有对应视频"; target.append(empty); }
+    }
+    async function loadIssueVideos() {
+      if (!selectedIssue) { renderIssueVideos({ total: 0, items: [] }); return; }
+      const query = params(); query.set("issue", selectedIssue); const response = await fetch(`/api/statistics/issues/videos?${query}`); if (!response.ok) throw new Error("问题视频加载失败"); renderIssueVideos(await response.json());
     }
     async function loadOptions() { const data = await (await fetch("/api/videos/options")).json(); for (const field of ["level_1", "level_2", "batch"]) for (const value of data[field]) { const option = document.createElement("option"); option.value = value; option.textContent = value || "（空）"; filters.elements[field].append(option); } }
     async function load() {
@@ -96,7 +170,7 @@
       const data = await (await fetch(`/api/statistics/overview?${params()}`)).json();
       const summary = data.summary;
       document.querySelector("#summary").innerHTML = [["视频总数", summary.total], ["已审核", summary.reviewed], ["未审核", summary.unreviewed], ["完成率", `${summary.completion_rate}%`], ["有备注", summary.noted], ["总时长", formatDuration(summary.total_duration)]].map(item => `<div class="metric"><span>${item[0]}</span><strong>${item[1]}</strong></div>`).join("");
-      renderBars(document.querySelector("#ratings"), data.ratings, "rating"); renderBars(document.querySelector("#original-types"), data.original_types); renderBars(document.querySelector("#issues"), data.issues); renderBatches(data.batches); status.textContent = `统计范围内共 ${summary.total} 条视频`;
+      renderRatings(data.ratings); renderBars(document.querySelector("#original-types"), data.original_types); renderIssues(data.issues); renderBatches(data.batches); await loadIssueVideos(); status.textContent = `统计范围内共 ${summary.total} 条视频`;
     }
     filters.addEventListener("submit", event => { event.preventDefault(); load().catch(error => { status.className = "error"; status.textContent = "统计加载失败，请检查网络"; }); });
     loadOptions().then(load).catch(() => { status.className = "error"; status.textContent = "统计加载失败，请检查网络"; });

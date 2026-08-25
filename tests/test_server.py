@@ -134,7 +134,16 @@ class ServerTests(unittest.TestCase):
             json={
                 "original_type": "人像原片",
                 "rating": "不合格",
-                "review_note": "人像偏黄；人像模糊",
+                "review_note": "人像偏黄；人像模糊；自定义问题",
+                "version": 0,
+            },
+        )
+        self.client.patch(
+            f"/api/videos/{second_video['video_id']}/review",
+            json={
+                "original_type": "屏幕原片",
+                "rating": "合格",
+                "review_note": "自定义问题",
                 "version": 0,
             },
         )
@@ -142,16 +151,46 @@ class ServerTests(unittest.TestCase):
         self.assertIn("统计分析", self.client.get("/statistics").text)
         result = self.client.get("/api/statistics/overview").json()
         self.assertEqual(result["summary"]["total"], 2)
-        self.assertEqual(result["summary"]["reviewed"], 1)
-        self.assertEqual(result["summary"]["unreviewed"], 1)
-        self.assertEqual(result["summary"]["completion_rate"], 50.0)
+        self.assertEqual(result["summary"]["reviewed"], 2)
+        self.assertEqual(result["summary"]["unreviewed"], 0)
+        self.assertEqual(result["summary"]["completion_rate"], 100.0)
         self.assertEqual(result["batches"][0]["failed"], 1)
         ratings = {item["name"]: item["count"] for item in result["ratings"]}
         issues = {item["name"]: item["count"] for item in result["issues"]}
         self.assertEqual(ratings["不合格"], 1)
-        self.assertEqual(ratings["未评级"], 1)
+        self.assertEqual(ratings["合格"], 1)
         self.assertEqual(issues["人像偏黄"], 1)
         self.assertEqual(issues["人像模糊"], 1)
+        self.assertEqual(issues["自定义问题"], 2)
+
+        filtered = self.client.get(
+            "/api/statistics/overview",
+            params=[("original_type", "人像原片"), ("original_type", "屏幕原片")],
+        ).json()
+        self.assertEqual(filtered["summary"]["total"], 2)
+        filtered = self.client.get(
+            "/api/statistics/overview", params={"original_type": "人像原片"}
+        ).json()
+        self.assertEqual(filtered["summary"]["total"], 1)
+
+        videos = self.client.get(
+            "/api/statistics/issues/videos", params={"issue": "自定义问题"}
+        ).json()
+        self.assertEqual(videos["total"], 2)
+        self.assertEqual(videos["items"][0]["level_1"], "W33")
+        self.assertEqual(len(videos["items"][0]["snapshots"]), 1)
+        videos = self.client.get(
+            "/api/statistics/issues/videos",
+            params={"issue": "自定义问题", "original_type": "屏幕原片"},
+        ).json()
+        self.assertEqual(videos["total"], 1)
+        self.assertEqual(videos["items"][0]["review"]["original_type"], "屏幕原片")
+        self.assertEqual(
+            self.client.get(
+                "/api/statistics/overview", params={"original_type": "未知类型"}
+            ).status_code,
+            422,
+        )
 
 
 if __name__ == "__main__":

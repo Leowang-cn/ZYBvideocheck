@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 from datetime import date, datetime
 from pathlib import Path
 from typing import Iterator, Literal, Optional
@@ -18,6 +19,7 @@ from server.database import Review, Snapshot, Video, create_session_factory
 
 RATING_VALUES = ("未评级", "优秀", "良好", "合格", "不合格", "无需审核")
 ORIGINAL_TYPE_VALUES = ("", "新片", "旧片新剪", "人像原片", "屏幕原片")
+ISSUE_SEPARATOR = re.compile(r"[；;，,\n]+")
 
 
 class SnapshotInput(BaseModel):
@@ -194,22 +196,26 @@ def create_app(settings: Optional[ServerSettings] = None) -> FastAPI:
     @application.get("/api/statistics/overview")
     def statistics_overview(
         filters: dict[str, object] = Depends(query_parameters),
+        original_type: list[str] = Query(default=[]),
         session: Session = Depends(database),
     ) -> dict[str, object]:
+        invalid_types = set(original_type) - set(ORIGINAL_TYPE_VALUES)
+        if invalid_types:
+            raise HTTPException(status_code=422, detail="原片类型值无效")
         videos = session.scalars(
             filtered_query(**filters)
             .options(selectinload(Video.review))
             .order_by(Video.created_date, Video.id)
         ).all()
+        if original_type:
+            videos = [
+                video for video in videos
+                if video.review and video.review.original_type in original_type
+            ]
         ratings = {value: 0 for value in RATING_VALUES}
         original_types = {value: 0 for value in ORIGINAL_TYPE_VALUES if value}
         batches: dict[str, dict[str, object]] = {}
-        issues = {
-            value: 0 for value in (
-                "人像偏黄", "人像偏暗", "人像泛绿", "人像模糊",
-                "人像和课件不统一", "头发边缘锯齿", "人像边缘有粗边",
-            )
-        }
+        issues: dict[str, int] = {}
         reviewed = 0
         reviewed_duration = 0.0
         noted = 0
@@ -227,9 +233,8 @@ def create_app(settings: Optional[ServerSettings] = None) -> FastAPI:
             note = review.review_note if review else ""
             if note:
                 noted += 1
-                for issue in issues:
-                    if issue in note:
-                        issues[issue] += 1
+                for issue in _review_issues(note):
+                    issues[issue] = issues.get(issue, 0) + 1
             batch = batches.setdefault(
                 video.batch,
                 {"batch": video.batch, "total": 0, "reviewed": 0, "failed": 0},
@@ -262,6 +267,28 @@ def create_app(settings: Optional[ServerSettings] = None) -> FastAPI:
                 for name, count in sorted(issues.items(), key=lambda item: (-item[1], item[0]))
             ],
         }
+
+    @application.get("/api/statistics/issues/videos")
+    def statistics_issue_videos(
+        issue: str = Query(min_length=1, max_length=5000),
+        filters: dict[str, object] = Depends(query_parameters),
+        original_type: list[str] = Query(default=[]),
+        session: Session = Depends(database),
+    ) -> dict[str, object]:
+        invalid_types = set(original_type) - set(ORIGINAL_TYPE_VALUES)
+        if invalid_types:
+            raise HTTPException(status_code=422, detail="原片类型值无效")
+        videos = session.scalars(
+            filtered_query(**filters)
+            .options(selectinload(Video.snapshots), selectinload(Video.review))
+            .order_by(Video.created_date.desc(), Video.id.desc())
+        ).all()
+        items = [
+            video for video in videos
+            if issue in _review_issues(video.review.review_note if video.review else "")
+            and (not original_type or video.review.original_type in original_type)
+        ]
+        return {"issue": issue, "total": len(items), "items": [_video_data(video) for video in items]}
 
     @application.patch("/api/videos/{video_id}/review")
     def save_review(
@@ -355,6 +382,10 @@ def _video_data(video: Video) -> dict[str, object]:
 
 def _csv_safe(value: str) -> str:
     return f"'{value}" if value.startswith(("=", "+", "-", "@")) else value
+
+
+def _review_issues(note: str) -> list[str]:
+    return list(dict.fromkeys(value.strip() for value in ISSUE_SEPARATOR.split(note) if value.strip()))
 
 
 app = create_app()
