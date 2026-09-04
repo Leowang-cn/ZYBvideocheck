@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import shutil
 from dataclasses import dataclass
+from pathlib import Path
 from pathlib import PurePosixPath
 from typing import Iterator
 from urllib.error import HTTPError, URLError
@@ -33,6 +35,21 @@ class OpenListClient:
         if not raw_url:
             raise RuntimeError(f"OpenList 未返回下载地址：{path}")
         return raw_url
+
+    def download(self, path: str, destination: Path) -> None:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        partial_path = destination.with_suffix(f"{destination.suffix}.part")
+        request = Request(
+            self.download_url(path),
+            headers={"User-Agent": "video-review/1.0"},
+        )
+        try:
+            with urlopen(request, timeout=120) as response, partial_path.open("wb") as output:
+                shutil.copyfileobj(response, output, length=1024 * 1024)
+            partial_path.replace(destination)
+        except Exception:
+            partial_path.unlink(missing_ok=True)
+            raise
 
     def page_url(self, path: str) -> str:
         encoded_path = quote(path, safe="/")

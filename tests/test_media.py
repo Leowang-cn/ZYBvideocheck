@@ -1,3 +1,4 @@
+import json
 import subprocess
 import tempfile
 import unittest
@@ -20,7 +21,7 @@ class SnapshotSecondsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             video_path = root / "4k.mp4"
-            snapshot_path = root / "snapshot.jpg"
+            snapshot_path = root / "snapshot.png"
             subprocess.run(
                 [
                     "ffmpeg",
@@ -41,8 +42,30 @@ class SnapshotSecondsTests(unittest.TestCase):
 
             create_snapshot(video_path, snapshot_path, 0.0)
 
-            snapshot_info = probe_video(snapshot_path)
-            self.assertEqual((snapshot_info.width, snapshot_info.height), (3840, 2160))
+            result = subprocess.run(
+                [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-select_streams",
+                    "v:0",
+                    "-show_entries",
+                    "stream=codec_name,width,height,pix_fmt,color_range,color_transfer,color_primaries",
+                    "-of",
+                    "json",
+                    str(snapshot_path),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            stream = json.loads(result.stdout)["streams"][0]
+            self.assertEqual((stream["width"], stream["height"]), (3840, 2160))
+            self.assertEqual(stream["codec_name"], "png")
+            self.assertEqual(stream["pix_fmt"], "rgb24")
+            self.assertEqual(stream["color_range"], "pc")
+            self.assertEqual(stream["color_transfer"], "iec61966-2-1")
+            self.assertEqual(stream["color_primaries"], "bt709")
 
     def test_proxy_limits_4k_video_to_1080p(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

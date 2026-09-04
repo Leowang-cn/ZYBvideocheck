@@ -4,6 +4,7 @@
 .venv/
 __pycache__/
 *.py[cod]
+/data/
 视频走查服务器交付包.tar.gz
 待处理视频/*
 输出/*

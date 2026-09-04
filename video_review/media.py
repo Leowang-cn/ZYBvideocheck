@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Union
@@ -69,25 +70,62 @@ def snapshot_seconds(duration: float) -> tuple[float, ...]:
     return tuple(seconds)
 
 
-def create_snapshot(file_path: MediaSource, output_path: Path, second: float) -> None:
+def create_snapshot(
+    file_path: MediaSource,
+    output_path: Path,
+    second: float,
+    input_transfer: str = "bt709",
+) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        [
-            "ffmpeg",
-            "-y",
-            "-ss",
-            f"{second:.3f}",
-            "-i",
-            str(file_path),
-            "-frames:v",
-            "1",
-            "-q:v",
-            "2",
-            str(output_path),
-        ],
-        check=True,
-        capture_output=True,
+    if input_transfer not in {"bt709", "srgb"}:
+        raise ValueError(f"不支持的输入传递特性：{input_transfer}")
+    # Video is normally BT.709 limited-range YUV, while browsers and macOS image
+    # viewers expect full-range sRGB still images. Make that conversion explicit
+    # and encode losslessly so the snapshot does not inherit JPEG's ambiguous
+    # YCbCr matrix/range interpretation.
+    color_filter = (
+        "colorspace="
+        f"ispace=bt709:irange=tv:iprimaries=bt709:itrc={input_transfer}:"
+        "space=bt709:range=pc:primaries=bt709:trc=srgb:"
+        "format=yuv444p:dither=fsb,format=rgb24"
     )
+    attempts = (
+        second,
+        second,
+        max(second - 3.0, 0.0),
+        max(second - 10.0, 0.0),
+        max(second - 30.0, 0.0),
+        max(second - 180.0, 0.0),
+    )
+    last_error = "未知错误"
+    for attempt, snapshot_second in enumerate(attempts):
+        result = subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-ss",
+                f"{snapshot_second:.3f}",
+                "-i",
+                str(file_path),
+                "-vf",
+                color_filter,
+                "-frames:v",
+                "1",
+                str(output_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0 and output_path.exists() and output_path.stat().st_size:
+            return
+        last_error = next(
+            (line.strip() for line in reversed(result.stderr.splitlines()) if line.strip()),
+            f"ffmpeg 退出码 {result.returncode}",
+        )
+        output_path.unlink(missing_ok=True)
+        if attempt == 0:
+            time.sleep(1)
+    raise RuntimeError(f"无法截取 {second:.3f} 秒画面：{last_error}")
 
 
 def create_proxy_video(file_path: MediaSource, output_path: Path) -> None:

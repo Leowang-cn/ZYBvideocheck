@@ -24,6 +24,7 @@ class ImportRecord:
     exported: bool
     batch: str = ""
     created_at: str = ""
+    snapshot_version: int = 1
 
 
 class History:
@@ -68,6 +69,10 @@ class History:
             self.connection.execute(
                 "UPDATE imports SET created_at = updated_at WHERE created_at = ''"
             )
+        if "snapshot_version" not in columns:
+            self.connection.execute(
+                "ALTER TABLE imports ADD COLUMN snapshot_version INTEGER NOT NULL DEFAULT 1"
+            )
         self.connection.commit()
 
     def close(self) -> None:
@@ -86,14 +91,18 @@ class History:
                 video_id, source_path, file_name, file_size, duration, width, height,
                 snapshot_second, snapshot_path, video_key, snapshot_key,
                 video_uploaded, snapshot_uploaded, exported, error, updated_at, batch,
-                created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, COALESCE(NULLIF(?, ''), CURRENT_TIMESTAMP))
+                created_at, snapshot_version
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, COALESCE(NULLIF(?, ''), CURRENT_TIMESTAMP), ?)
             ON CONFLICT(video_id) DO UPDATE SET
                 source_path=excluded.source_path,
+                snapshot_second=excluded.snapshot_second,
+                snapshot_path=excluded.snapshot_path,
+                snapshot_key=excluded.snapshot_key,
                 video_uploaded=excluded.video_uploaded,
                 snapshot_uploaded=excluded.snapshot_uploaded,
                 exported=excluded.exported,
                 error=excluded.error,
+                snapshot_version=excluded.snapshot_version,
                 updated_at=CURRENT_TIMESTAMP
             """,
             (
@@ -114,6 +123,41 @@ class History:
                 error,
                 record.batch,
                 record.created_at,
+                record.snapshot_version,
+            ),
+        )
+        self.connection.commit()
+
+    def snapshot_refresh_candidates(self, target_version: int) -> list[ImportRecord]:
+        rows = self.connection.execute(
+            """
+            SELECT * FROM imports
+            WHERE snapshot_version < ?
+            ORDER BY updated_at, file_name
+            """,
+            (target_version,),
+        ).fetchall()
+        return [self._record(row) for row in rows]
+
+    def update_snapshots(
+        self,
+        video_id: str,
+        snapshot_paths: tuple[str, ...],
+        snapshot_keys: tuple[str, ...],
+        snapshot_version: int,
+    ) -> None:
+        self.connection.execute(
+            """
+            UPDATE imports
+            SET snapshot_path = ?, snapshot_key = ?, snapshot_uploaded = 1,
+                snapshot_version = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE video_id = ?
+            """,
+            (
+                json.dumps(snapshot_paths, ensure_ascii=False),
+                json.dumps(snapshot_keys, ensure_ascii=False),
+                snapshot_version,
+                video_id,
             ),
         )
         self.connection.commit()
@@ -178,4 +222,5 @@ class History:
             exported=bool(row["exported"]),
             batch=str(row["batch"]),
             created_at=str(row["created_at"]),
+            snapshot_version=int(row["snapshot_version"]),
         )

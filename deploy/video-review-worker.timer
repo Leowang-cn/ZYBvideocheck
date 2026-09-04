@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Video Review Worker Weekly
+
+[Timer]
+OnCalendar=Mon *-*-* 03:00:00
+Persistent=true
+RandomizedDelaySec=10m
+Unit=video-review-worker.service
+
+[Install]
+WantedBy=timers.target

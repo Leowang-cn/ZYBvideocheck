@@ -72,7 +72,7 @@ class PipelineTests(unittest.TestCase):
             self.assertIn("00:00:04", html)
             self.assertIn("00:00:05", html)
             self.assertIn("https://example.test/fixed/folder/", html)
-            self.assertEqual(html.count("data:image/jpeg;base64,"), 3)
+            self.assertEqual(html.count("data:image/png;base64,"), 3)
 
             second_video_path = input_dir / "第二条视频.mp4"
             subprocess.run(
@@ -103,7 +103,7 @@ class PipelineTests(unittest.TestCase):
             )
             self.assertIn("测试批次", updated_html)
             self.assertIn("第二批次", updated_html)
-            self.assertEqual(updated_html.count("data:image/jpeg;base64,"), 5)
+            self.assertEqual(updated_html.count("data:image/png;base64,"), 5)
             self.assertIn('id="batch-filter"', updated_html)
             self.assertIn('id="first-level-filter"', updated_html)
             self.assertIn('id="second-level-filter"', updated_html)

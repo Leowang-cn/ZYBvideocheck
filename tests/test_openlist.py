@@ -65,22 +65,23 @@ class OpenListTests(unittest.TestCase):
     @patch("video_review.pipeline.create_snapshot")
     @patch("video_review.pipeline.probe_video")
     @patch("video_review.pipeline.OpenListClient")
-    def test_remote_pipeline_links_baidu_page_and_only_uploads_snapshots(
+    def test_remote_pipeline_transfers_video_to_cos_and_uploads_snapshots(
         self, client_class, probe_video, create_snapshot
     ) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
-            remote_file = OpenListFile("/remote/W34/course/video.mp4", "video.mp4", 123, "now")
+            remote_file = OpenListFile("/remote/W34/course/video.mp4", "video.mp4", 12, "now")
             client = client_class.return_value
             client.find_videos.return_value = [remote_file]
             client.download_url.return_value = "https://download.test/video.mp4"
-            client.baidu_pan_page_url.return_value = (
-                "https://pan.baidu.com/disk/main#/index?category=all&path=%2FW34%2Fcourse"
+            client.download.side_effect = (
+                lambda path, destination: destination.write_bytes(b"remote-video")
             )
+            client.baidu_pan_page_url.return_value = "https://pan.baidu.com/source"
             probe_video.return_value = VideoInfo(10.0, 3840, 2160, "h264")
             def write_snapshot(source, output, second):
                 output.parent.mkdir(parents=True, exist_ok=True)
-                output.write_bytes(b"jpg")
+                output.write_bytes(b"png")
 
             create_snapshot.side_effect = write_snapshot
             settings = Settings(
@@ -104,21 +105,25 @@ class OpenListTests(unittest.TestCase):
 
             self.assertEqual(errors, [])
             self.assertIsNotNone(report_path)
-            self.assertEqual(len(uploader.uploads), 3)
+            self.assertEqual(len(uploader.uploads), 4)
+            client.download.assert_called_once_with(
+                remote_file.path, unittest.mock.ANY
+            )
+            self.assertEqual(uploader.uploads[0][1].split("/")[-1], "video.mp4")
             self.assertEqual(probe_video.call_args.args[0], "https://download.test/video.mp4")
             self.assertTrue(all(call.args[0] == "https://download.test/video.mp4" for call in create_snapshot.call_args_list))
             html = report_path.read_text(encoding="utf-8")
             self.assertIn("3840 × 2160", html)
             self.assertIn('<td class="source">W34</td>', html)
             self.assertIn('<td class="source">course</td>', html)
-            self.assertIn("https://pan.baidu.com/disk/main#/index?category=all&amp;path=%2FW34%2Fcourse", html)
+            self.assertIn("https://cos.test/prefix/", html)
             self.assertIn("打开原视频", html)
 
             second_report_path, second_errors = run(settings, uploader, "remote-2")
 
             self.assertIsNone(second_report_path)
             self.assertEqual(second_errors, [])
-            self.assertEqual(len(uploader.uploads), 3)
+            self.assertEqual(len(uploader.uploads), 4)
             self.assertEqual(probe_video.call_count, 1)
 
     def test_baidu_page_url_removes_openlist_mount_path(self) -> None:

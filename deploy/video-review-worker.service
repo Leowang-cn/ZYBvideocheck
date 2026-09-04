@@ -1,0 +1,14 @@
+[Unit]
+Description=Video Review Baidu-to-COS Worker
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=video-review
+Group=video-review
+WorkingDirectory=/data/deploys/video-review
+EnvironmentFile=/etc/video-review/worker.env
+ExecStart=/data/deploys/video-review/.venv/bin/python -m video_review.cli
+NoNewPrivileges=true
+PrivateTmp=true

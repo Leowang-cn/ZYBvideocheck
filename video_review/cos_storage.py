@@ -25,10 +25,34 @@ class CosUploader:
         self.bucket = settings.cos_bucket
 
     def upload(self, local_path: Path, object_key: str) -> None:
-        with local_path.open("rb") as file_handle:
-            self.client.put_object(
-                Bucket=self.bucket,
-                Key=object_key,
-                Body=file_handle,
-                ACL="public-read",
+        self.upload_with_metadata(local_path, object_key)
+
+    def upload_with_metadata(
+        self,
+        local_path: Path,
+        object_key: str,
+        content_type: str | None = None,
+        cache_control: str | None = None,
+    ) -> None:
+        options = {}
+        if content_type:
+            options["ContentType"] = content_type
+        if cache_control:
+            options["CacheControl"] = cache_control
+        self.client.upload_file(
+            Bucket=self.bucket,
+            Key=object_key,
+            LocalFilePath=str(local_path),
+            PartSize=8,
+            MAXThread=4,
+            EnableMD5=True,
+            ACL="public-read",
+            **options,
+        )
+        metadata = self.client.head_object(Bucket=self.bucket, Key=object_key)
+        remote_size = int(metadata["Content-Length"])
+        local_size = local_path.stat().st_size
+        if remote_size != local_size:
+            raise RuntimeError(
+                f"COS 对象大小不一致：本地 {local_size}，远端 {remote_size}"
             )

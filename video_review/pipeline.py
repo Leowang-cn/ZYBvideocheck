@@ -78,12 +78,13 @@ def _process_openlist_video(
         info = probe_video(source_url)
         seconds = snapshot_seconds(info.duration)
         snapshot_paths = tuple(
-            settings.output_dir / "截图" / f"{video_id}_{index}.jpg"
+            settings.output_dir / "截图" / f"{video_id}_{index}.png"
             for index in range(1, len(seconds) + 1)
         )
         for snapshot_path, second in zip(snapshot_paths, seconds):
             create_snapshot(client.download_url(remote_file.path), snapshot_path, second)
         week = datetime.now().strftime("%G-W%V")
+        extension = Path(remote_file.name).suffix.lower().lstrip(".") or "mp4"
         record = ImportRecord(
             video_id=video_id,
             source_path=remote_file.path,
@@ -94,19 +95,34 @@ def _process_openlist_video(
             height=info.height,
             snapshot_seconds=seconds,
             snapshot_paths=tuple(str(path) for path in snapshot_paths),
-            video_key=client.baidu_pan_page_url(
-                remote_file.path, settings.effective_baidu_pan_mount_path()
-            ),
+            video_key=settings.object_key(f"{week}/{video_id}/video.{extension}"),
             snapshot_keys=tuple(
-                settings.object_key(f"{week}/{video_id}/snapshot-{index}.jpg")
+                settings.object_key(f"{week}/{video_id}/snapshot-{index}.png")
                 for index in range(1, len(seconds) + 1)
             ),
-            video_uploaded=True,
+            video_uploaded=False,
             snapshot_uploaded=False,
             exported=False,
             created_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            snapshot_version=2,
         )
         history.save(record)
+
+    if not record.video_uploaded:
+        extension = Path(record.file_name).suffix.lower() or ".mp4"
+        temporary_path = settings.data_dir / "temp" / f"{record.video_id}{extension}"
+        temporary_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            client.download(record.source_path, temporary_path)
+            if temporary_path.stat().st_size != record.file_size:
+                raise RuntimeError(
+                    f"下载文件大小不一致：预期 {record.file_size}，实际 {temporary_path.stat().st_size}"
+                )
+            uploader.upload(temporary_path, record.video_key)
+            record = replace(record, video_uploaded=True)
+            history.save(record)
+        finally:
+            temporary_path.unlink(missing_ok=True)
 
     if not record.snapshot_uploaded:
         for snapshot_path, snapshot_key in zip(record.snapshot_paths, record.snapshot_keys):
@@ -127,7 +143,7 @@ def _process_video(
         info = probe_video(file_path)
         seconds = snapshot_seconds(info.duration)
         snapshot_paths = tuple(
-            settings.output_dir / "截图" / f"{video_id}_{index}.jpg"
+            settings.output_dir / "截图" / f"{video_id}_{index}.png"
             for index in range(1, len(seconds) + 1)
         )
         for snapshot_path, second in zip(snapshot_paths, seconds):
@@ -146,13 +162,14 @@ def _process_video(
             snapshot_paths=tuple(str(path) for path in snapshot_paths),
             video_key=settings.object_key(f"{week}/{video_id}/video.{extension}"),
             snapshot_keys=tuple(
-                settings.object_key(f"{week}/{video_id}/snapshot-{index}.jpg")
+                settings.object_key(f"{week}/{video_id}/snapshot-{index}.png")
                 for index in range(1, len(seconds) + 1)
             ),
             video_uploaded=False,
             snapshot_uploaded=False,
             exported=False,
             created_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            snapshot_version=2,
         )
         history.save(record)
 

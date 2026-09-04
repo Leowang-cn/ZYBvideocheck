@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import subprocess
 from datetime import datetime
 from html import escape
 from pathlib import Path, PurePosixPath
@@ -21,8 +22,23 @@ def format_size(size: int) -> str:
 
 
 def image_data_url(image_path: str) -> str:
-    encoded = base64.b64encode(Path(image_path).read_bytes()).decode("ascii")
-    return f"data:image/jpeg;base64,{encoded}"
+    path = Path(image_path)
+    media_type = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
+    image_bytes = path.read_bytes()
+    if path.suffix.lower() == ".png":
+        result = subprocess.run(
+            [
+                "ffmpeg", "-v", "error", "-i", str(path),
+                "-vf", "scale=640:-2:force_original_aspect_ratio=decrease",
+                "-frames:v", "1", "-compression_level", "9",
+                "-f", "image2pipe", "-vcodec", "png", "pipe:1",
+            ],
+            capture_output=True,
+        )
+        if result.returncode == 0 and result.stdout:
+            image_bytes = result.stdout
+    encoded = base64.b64encode(image_bytes).decode("ascii")
+    return f"data:{media_type};base64,{encoded}"
 
 
 def relative_source_path(source_path: str, input_dir: Path) -> str:
@@ -228,7 +244,7 @@ def export_html(
     function showImage(index) {{
       imageIndex = (index + thumbnails.length) % thumbnails.length;
       const thumbnail = thumbnails[imageIndex];
-      viewerImage.src = thumbnail.querySelector("img").src;
+      viewerImage.src = thumbnail.dataset.fullSrc || thumbnail.querySelector("img").src;
       viewerCaption.textContent = `${{imageIndex + 1}} / ${{thumbnails.length}} · ${{thumbnail.dataset.caption}}`;
     }}
     thumbnails.forEach((thumbnail, index) => thumbnail.addEventListener("click", () => {{
@@ -264,7 +280,8 @@ def _record_row(
         caption = f"{record.file_name} · {format_duration(second)}"
         snapshots.append(
             f'<figure><button class="thumbnail" type="button" '
-            f'data-caption="{escape(caption, quote=True)}">'
+            f'data-caption="{escape(caption, quote=True)}" '
+            f'data-full-src="{escape(snapshot_url, quote=True)}">'
             f'<img src="{image_data_url(path)}" alt="截图 {index}"></button>'
             f'<figcaption>{format_duration(second)} · <a class="snapshot-link" href="{escape(snapshot_url, quote=True)}" '
             f'target="_blank">原图</a></figcaption></figure>'
