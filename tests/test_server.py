@@ -1,6 +1,8 @@
 import tempfile
 import unittest
+import os
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -42,6 +44,29 @@ class ServerTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
+
+    def test_settings_use_data_dir_for_default_sqlite_database(self) -> None:
+        data_dir = Path(self.temporary_directory.name) / "persistent-data"
+        with patch.dict(os.environ, {"DATA_DIR": str(data_dir)}, clear=True):
+            settings = ServerSettings.from_env()
+
+        self.assertEqual(
+            settings.database_url,
+            f"sqlite:///{data_dir.resolve() / 'video-review-server.sqlite'}",
+        )
+
+    def test_explicit_database_url_takes_precedence_over_data_dir(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "DATABASE_URL": "sqlite:////tmp/explicit.sqlite",
+                "DATA_DIR": "/tmp/ignored",
+            },
+            clear=True,
+        ):
+            settings = ServerSettings.from_env()
+
+        self.assertEqual(settings.database_url, "sqlite:////tmp/explicit.sqlite")
 
     def import_video(self):
         return self.client.post(

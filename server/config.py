@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
 from sqlalchemy import URL
 
@@ -23,7 +24,10 @@ class ServerSettings:
                 port=int(os.getenv("DATABASE_PORT", "5432")),
                 database=os.getenv("DATABASE_NAME", "video_review").strip(),
             )
+        if not database_url:
+            data_dir = Path(os.getenv("DATA_DIR", "数据")).resolve()
+            database_url = f"sqlite:///{data_dir / 'video-review-server.sqlite'}"
         return cls(
-            database_url=database_url or "sqlite:///./数据/video-review-server.sqlite",
+            database_url=database_url,
             import_token=os.getenv("IMPORT_TOKEN", "").strip(),
         )

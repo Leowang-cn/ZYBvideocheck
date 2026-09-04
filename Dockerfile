@@ -9,10 +9,11 @@ COPY requirements-server.txt ./
 RUN pip install --no-cache-dir -r requirements-server.txt
 
 COPY server ./server
+COPY deploy/start-server.sh ./deploy/start-server.sh
 
 RUN useradd --create-home --uid 10001 appuser
 USER appuser
 
 EXPOSE 8000
 
-ENTRYPOINT ["uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+ENTRYPOINT ["sh", "deploy/start-server.sh"]
