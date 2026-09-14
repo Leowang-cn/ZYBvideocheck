@@ -8,6 +8,7 @@ from urllib.request import Request, urlopen
 from video_review.config import Settings
 from video_review.history import ImportRecord
 from video_review.html_report import record_source_levels
+from video_review.openlist_client import OpenListClient
 
 
 def push_records(records: list[ImportRecord], settings: Settings) -> dict[str, object]:
@@ -41,6 +42,13 @@ def push_records(records: list[ImportRecord], settings: Settings) -> dict[str, o
 def _record_payload(record: ImportRecord, settings: Settings) -> dict[str, object]:
     level_1, level_2 = record_source_levels(record, settings)
     created_date = (record.created_at or date.today().isoformat())[:10]
+    video_url = (
+        settings.public_url(record.video_key)
+        if record.video_uploaded
+        else OpenListClient.baidu_pan_page_url(
+            record.source_path, settings.effective_baidu_pan_mount_path()
+        )
+    )
     return {
         "video_id": record.video_id,
         "level_1": level_1,
@@ -52,7 +60,7 @@ def _record_payload(record: ImportRecord, settings: Settings) -> dict[str, objec
         "duration": record.duration,
         "width": record.width,
         "height": record.height,
-        "video_url": settings.public_url(record.video_key),
+        "video_url": video_url,
         "snapshots": [
             {
                 "sequence": index,

@@ -22,6 +22,7 @@ class Settings:
     openlist_token: str = ""
     openlist_path: str = ""
     baidu_pan_mount_path: str = ""
+    snapshots_only: bool = False
 
     @classmethod
     def from_env(cls, root_dir: Path) -> "Settings":

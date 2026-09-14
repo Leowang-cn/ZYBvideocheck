@@ -217,7 +217,7 @@ def export_html(
         row.dataset.createdAt,
         row.dataset.batch,
         row.dataset.videoName,
-        row.querySelector(".video-link").href,
+        row.querySelector(".video-link")?.href || "",
         [...row.querySelectorAll(".snapshot-link")].map(link => link.href).join("\\n"),
         row.dataset.fileSize,
         row.dataset.duration,
@@ -272,6 +272,10 @@ def _record_row(
     record: ImportRecord, settings: Settings, imported_at: str
 ) -> str:
     video_url = settings.public_url(record.video_key)
+    video_link = (
+      f'<a class="video-link" href="{escape(video_url, quote=True)}" target="_blank">打开原视频</a>'
+      if record.video_uploaded else "原视频未上传"
+    )
     snapshots = []
     for index, (path, key, second) in enumerate(
         zip(record.snapshot_paths, record.snapshot_keys, record.snapshot_seconds), start=1
@@ -295,7 +299,7 @@ def _record_row(
   <td class="source">{escape(second_level)}</td>
   <td class="meta">{escape(created_date)}</td>
   <td class="name">{escape(record.file_name)}<br><small>批次：{escape(record.batch or "未标记")}<br>报告更新：{imported_at}</small></td>
-  <td><a class="video-link" href="{escape(video_url, quote=True)}" target="_blank">打开原视频</a></td>
+  <td>{video_link}</td>
   <td><div class="snapshots">{''.join(snapshots)}</div></td>
   <td class="meta">{format_size(record.file_size)}<br>{format_duration(record.duration)}<br>{record.width} × {record.height}</td>
   <td><select aria-label="原片类型"><option value=""></option><option>新片</option><option>旧片新剪</option><option>人像原片</option><option>屏幕原片</option></select></td>

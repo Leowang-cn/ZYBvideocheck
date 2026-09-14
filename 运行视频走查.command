@@ -11,9 +11,9 @@ fi
 
 read -r "batch?请输入批次名称（直接回车使用当天日期）："
 if [[ -n "$batch" ]]; then
-    ./.venv/bin/python -m video_review.cli --batch "$batch"
+    ./.venv/bin/python -m video_review.cli --snapshots-only --batch "$batch"
 else
-    ./.venv/bin/python -m video_review.cli
+    ./.venv/bin/python -m video_review.cli --snapshots-only
 fi
 exit_code=$?
 

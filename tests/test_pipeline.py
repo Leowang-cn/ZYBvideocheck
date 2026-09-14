@@ -1,10 +1,14 @@
 import subprocess
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
+from unittest.mock import patch
 
 from video_review.config import Settings
+from video_review.history import History, ImportRecord
 from video_review.pipeline import run
+from video_review.server_client import _record_payload
 
 
 class FakeUploader:
@@ -16,6 +20,46 @@ class FakeUploader:
 
 
 class PipelineTests(unittest.TestCase):
+    def test_snapshot_mode_syncs_existing_remote_records_without_reupload(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            settings = Settings(
+                input_dir=root / "input", output_dir=root / "output",
+                data_dir=root / "data", cos_bucket="bucket", cos_region="region",
+                cos_prefix="prefix", cos_public_base_url="https://example.test",
+                secret_id="", secret_key="", server_url="https://server.test",
+                baidu_pan_mount_path="/baidu-test", snapshots_only=True,
+            )
+            record = ImportRecord(
+                video_id="remote", source_path="/baidu-test/W36/course/video.mp4",
+                file_name="video.mp4", file_size=10, duration=8, width=640, height=360,
+                snapshot_seconds=(3,), snapshot_paths=("snapshot.png",),
+                video_key="video.mp4", snapshot_keys=("snapshot.png",),
+                video_uploaded=False, snapshot_uploaded=True, exported=False,
+            )
+            history = History(settings.data_dir / "import-history.sqlite")
+            history.save(record)
+            history.save(replace(record, video_id="local", source_path=str(root / "local.mp4")))
+            history.close()
+            uploader = FakeUploader()
+            with patch("video_review.pipeline.push_records") as push, patch("video_review.pipeline.export_html"):
+                run(settings, uploader, "0914")
+                synced = push.call_args.args[0]
+                self.assertEqual([item.video_id for item in synced], ["remote"])
+                self.assertEqual(synced[0].batch, "0914")
+                run(settings, uploader, "0915")
+                self.assertEqual(push.call_args.args[0][0].batch, "0914")
+                self.assertEqual(push.call_count, 2)
+            self.assertEqual(uploader.uploads, [])
+            self.assertEqual(
+                _record_payload(record, settings)["video_url"],
+                "https://pan.baidu.com/disk/main#/index?category=all&path=%2FW36%2Fcourse",
+            )
+            self.assertEqual(
+                _record_payload(replace(record, video_uploaded=True), settings)["video_url"],
+                "https://example.test/video.mp4",
+            )
+
     def test_generates_fixed_html_and_appends_new_batches(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

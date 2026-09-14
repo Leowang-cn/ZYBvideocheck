@@ -162,6 +162,12 @@ class History:
         )
         self.connection.commit()
 
+    def snapshot_records(self) -> list[ImportRecord]:
+        rows = self.connection.execute(
+            "SELECT * FROM imports WHERE snapshot_uploaded = 1 ORDER BY updated_at, file_name"
+        ).fetchall()
+        return [self._record(row) for row in rows]
+
     def pending_export(self) -> list[ImportRecord]:
         rows = self.connection.execute(
             """

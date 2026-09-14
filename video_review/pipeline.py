@@ -43,6 +43,25 @@ def run(settings: Settings, uploader: Uploader, batch: str) -> tuple[Path | None
             except Exception as error:
                 errors.append(f"{file_path.name}: {error}")
 
+        if settings.snapshots_only:
+            records = history.snapshot_records()
+            if not records:
+                return None, errors
+            history.assign_batch([record.video_id for record in records], batch)
+            records = history.snapshot_records()
+            if settings.server_url:
+                mount = settings.effective_baidu_pan_mount_path().rstrip("/")
+                sync_records = [
+                    record for record in records
+                    if record.video_uploaded
+                    or (mount and record.source_path.startswith(f"{mount}/"))
+                ]
+                if sync_records:
+                    push_records(sync_records, settings)
+            output_path = settings.output_dir / "视频走查.html"
+            export_html(records, settings, batch, output_path)
+            return output_path, errors
+
         records = history.pending_export()
         if not records:
             if settings.server_url:
@@ -108,7 +127,7 @@ def _process_openlist_video(
         )
         history.save(record)
 
-    if not record.video_uploaded:
+    if not record.video_uploaded and not settings.snapshots_only:
         extension = Path(record.file_name).suffix.lower() or ".mp4"
         temporary_path = settings.data_dir / "temp" / f"{record.video_id}{extension}"
         temporary_path.parent.mkdir(parents=True, exist_ok=True)
@@ -173,7 +192,7 @@ def _process_video(
         )
         history.save(record)
 
-    if not record.video_uploaded:
+    if not record.video_uploaded and not settings.snapshots_only:
         uploader.upload(file_path, record.video_key)
         record = replace(record, video_uploaded=True)
         history.save(record)

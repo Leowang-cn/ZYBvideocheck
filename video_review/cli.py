@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
@@ -19,12 +20,14 @@ def main() -> int:
         default=date.today().isoformat(),
         help="写入 HTML 的批次名称，默认使用当天日期",
     )
+    parser.add_argument("--snapshots-only", action="store_true", help="仅上传截图并生成离线报告，不传原视频；配置服务器后同步可用记录")
     args = parser.parse_args()
     root_dir = Path(__file__).resolve().parent.parent
     load_dotenv(root_dir / ".env")
 
     try:
         settings = Settings.from_env(root_dir)
+        settings = replace(settings, snapshots_only=args.snapshots_only)
         settings.input_dir.mkdir(parents=True, exist_ok=True)
         uploader = CosUploader(settings)
         report_path, errors = run(settings, uploader, args.batch)
