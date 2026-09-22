@@ -307,11 +307,46 @@
     viewer.querySelector(".close").addEventListener("click", closeShowcase);
     viewer.addEventListener("click", event => { if (event.target === viewer) closeShowcase(); });
     viewer.addEventListener("cancel", event => { event.preventDefault(); closeShowcase(); });
+    const pressedModifiers = new Set();
+    document.addEventListener("keydown", event => {
+      if (["ControlLeft", "ControlRight", "AltLeft", "AltRight"].includes(event.code)) pressedModifiers.add(event.code);
+    }, true);
+    document.addEventListener("keyup", event => pressedModifiers.delete(event.code), true);
+    window.addEventListener("blur", () => pressedModifiers.clear());
     viewer.addEventListener("keydown", event => {
-      if (event.key === "ArrowLeft") moveShowcaseVideo(-1);
-      if (event.key === "ArrowRight") moveShowcaseVideo(1);
-      if (event.key === "ArrowUp") moveShowcaseShot(-1);
-      if (event.key === "ArrowDown") moveShowcaseShot(1);
+      if (!viewer.open || event.isComposing || event.metaKey || event.shiftKey) return;
+      const digit = /^Digit([1-5])$/.exec(event.code);
+      if (digit) {
+        let group;
+        let values;
+        if (event.ctrlKey && !event.altKey && pressedModifiers.has("ControlLeft") && !pressedModifiers.has("ControlRight")) {
+          group = showcaseOriginalType;
+          values = ["新片", "旧片新剪", "人像原片", "屏幕原片"];
+        } else if (event.altKey && !event.ctrlKey && pressedModifiers.has("AltLeft") && !pressedModifiers.has("AltRight")) {
+          group = showcaseRating;
+          values = ["优秀", "良好", "合格", "不合格", "无需审核"];
+        }
+        const value = values?.[Number(digit[1]) - 1];
+        if (value) {
+          event.preventDefault();
+          if (!event.repeat) {
+            selectChoice(group, value);
+            saveShowcaseReview();
+          }
+        }
+        return;
+      }
+      if (event.ctrlKey || event.altKey || event.target.closest("input, textarea, select, [contenteditable]")) return;
+      const actions = {
+        ArrowLeft: () => moveShowcaseShot(-1),
+        ArrowRight: () => moveShowcaseShot(1),
+        ArrowUp: () => moveShowcaseVideo(-1),
+        ArrowDown: () => moveShowcaseVideo(1),
+      };
+      if (actions[event.key]) {
+        event.preventDefault();
+        actions[event.key]();
+      }
     });
     loadOptions().then(load);
   </script>
