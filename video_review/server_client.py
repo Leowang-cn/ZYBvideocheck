@@ -17,6 +17,19 @@ def push_records(records: list[ImportRecord], settings: Settings) -> dict[str, o
     if not settings.import_token:
         raise ValueError("已配置服务器地址，但 VIDEO_REVIEW_IMPORT_TOKEN 为空")
 
+    totals = {"created": 0, "existing": 0, "updated": 0}
+    failed = []
+    record_ids = {}
+    for offset in range(0, len(records), 500):
+        result = _push_batch(records[offset:offset + 500], settings)
+        for key in totals:
+            totals[key] += result.get(key, 0)
+        failed.extend(result.get("failed", []))
+        record_ids.update(result.get("record_ids", {}))
+    return {**totals, "failed": failed, "record_ids": record_ids}
+
+
+def _push_batch(records: list[ImportRecord], settings: Settings) -> dict[str, object]:
     payload = {
         "videos": [_record_payload(record, settings) for record in records]
     }

@@ -1,14 +1,15 @@
+import json
 import subprocess
 import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from video_review.config import Settings
 from video_review.history import History, ImportRecord
 from video_review.pipeline import run
-from video_review.server_client import _record_payload
+from video_review.server_client import _record_payload, push_records
 
 
 class FakeUploader:
@@ -20,6 +21,34 @@ class FakeUploader:
 
 
 class PipelineTests(unittest.TestCase):
+    def test_server_sync_batches_requests_and_merges_results(self) -> None:
+        settings = MagicMock(server_url="https://server.test", import_token="test-token")
+        for count, expected_sizes in [(0, []), (500, [500]), (571, [500, 71])]:
+            with self.subTest(count=count):
+                sent = []
+
+                def respond(request, timeout):
+                    videos = json.loads(request.data)["videos"]
+                    self.assertLessEqual(len(videos), 500)
+                    sent.append(videos)
+                    response = MagicMock()
+                    response.__enter__.return_value.read.return_value = json.dumps({
+                        "created": len(videos) - 1, "existing": 1, "updated": 0,
+                        "failed": [], "record_ids": {str(item): item for item in videos},
+                    }).encode()
+                    return response
+
+                with patch("video_review.server_client._record_payload", side_effect=lambda record, settings: record), patch(
+                    "video_review.server_client.urlopen", side_effect=respond
+                ):
+                    result = push_records(list(range(count)), settings)
+                self.assertEqual([len(batch) for batch in sent], expected_sizes)
+                self.assertEqual([item for batch in sent for item in batch], list(range(count)))
+                self.assertEqual(result["created"], count - len(expected_sizes))
+                self.assertEqual(result["existing"], len(expected_sizes))
+                self.assertEqual(result["failed"], [])
+                self.assertEqual(len(result["record_ids"]), count)
+
     def test_snapshot_mode_syncs_existing_remote_records_without_reupload(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

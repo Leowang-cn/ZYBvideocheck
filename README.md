@@ -40,7 +40,7 @@
 ./.venv/bin/python -m video_review.dingtalk_video_download --output "/Users/leo/Downloads/待上传视频"
 ```
 
-更换表格、工作表名或视频列名时，可在 `.env` 中设置 `DINGTALK_SHEET_URL`、`DINGTALK_SHEET_TITLE` 和 `DINGTALK_VIDEO_COLUMN`。
+更换表格、工作表名或视频列名时，可在 `.env` 中设置 `DINGTALK_SHEET_URL`、`DINGTALK_SHEET_TITLE` 和 `DINGTALK_VIDEO_COLUMN`。视频列可填写表头文字，也可填写 Excel 列字母，例如 `E`。增加第二份及后续表格时，使用相同的带序号配置，例如 `DINGTALK_SHEET_URL_2`、`DINGTALK_SHEET_TITLE_2` 和 `DINGTALK_VIDEO_COLUMN_2`；每次执行会按序依次下载所有已配置来源。
 
 ### OpenList 远程输入
 

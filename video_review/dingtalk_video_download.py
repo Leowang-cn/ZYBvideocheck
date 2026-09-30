@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -47,7 +49,9 @@ for (let attempt = 0; attempt < 120; attempt++) {{
   ready = await js(String.raw`(() => {{
     const frame = document.querySelector('iframe')
     const page = frame?.contentWindow || window
-    return page.rawDataStore?.docData?.status === 'resolved'
+        const docData = page.rawDataStore?.docData
+        return docData?.status === 'resolved' &&
+            Boolean(docData.value?.documentContent?.checkpoint)
   }})()`)
   if (ready) break
   await wait(0.5)
@@ -58,13 +62,57 @@ const result = await js(String.raw`(async () => {{
   const frame = document.querySelector('iframe')
   const page = frame?.contentWindow || window
   const store = page.rawDataStore?.docData?.value
-  if (!store?.documentContent?.checkpoint?.content) {{
+    if (!store?.documentContent?.checkpoint) {{
     throw new Error('未找到钉钉表格的结构化数据')
   }}
 
-  const root = JSON.parse(store.documentContent.checkpoint.content)
+    let checkpointContent = store.documentContent.checkpoint.content
+    if (!checkpointContent) {{
+        if (!page.__videoDownloadWebpackRequire) {{
+            page.webpackChunkflex_table_app.push([
+                [Math.floor(Math.random() * 1e9)],
+                {{}},
+                require => {{ page.__videoDownloadWebpackRequire = require }},
+            ])
+        }}
+        const require = page.__videoDownloadWebpackRequire
+        const networkModuleId = Object.keys(require.m || {{}}).find(moduleId => {{
+            const factory = require.m[moduleId]
+            if (typeof factory !== 'function') return false
+            const source = Function.prototype.toString.call(factory)
+            return source.includes('getOssClient') &&
+                source.includes('[NetworkServiceImpl]') &&
+                source.includes('getDocConfigRepository')
+        }})
+        const createNetwork = networkModuleId
+            ? require(networkModuleId).i
+            : null
+        const loadCheckpoint = require(506656)?.U
+        if (typeof createNetwork !== 'function' || typeof loadCheckpoint !== 'function') {{
+            throw new Error('未找到钉钉外置表格加载接口，可能是页面版本已变更')
+        }}
+        const network = createNetwork({{accessToken: store.accessToken, appName: 'sheet'}})
+        try {{
+            const docKey = store.fileMetaInfo.docKey
+            checkpointContent = await loadCheckpoint({{
+                res: store.documentContent,
+                ossClient: network.getOssClient({{docKey, refreshDynamicConfig: false}}),
+                category: 'sheet',
+                logger: network.getLogger(),
+                docKey: {{docKey}},
+            }})
+        }} finally {{
+            network.destroy()
+        }}
+    }}
+    if (!checkpointContent) throw new Error('钉钉表格内容加载失败')
+    const root = JSON.parse(checkpointContent)
   const wantedSheetTitle = {json.dumps(sheet_title)}
-  const wantedHeader = {json.dumps(column_header)}
+    const wantedHeader = {json.dumps(column_header)}
+    const columnLetters = wantedHeader.match(/^[A-Za-z]+$/)
+    const wantedColumn = columnLetters
+        ? [...columnLetters[0].toUpperCase()].reduce((value, letter) => value * 26 + letter.charCodeAt(0) - 64, 0) - 1
+        : -1
   const sheetMeta = (root.sheetsMeta || []).find(item => item.title === wantedSheetTitle)
   if (!sheetMeta) throw new Error('未找到工作表：' + wantedSheetTitle)
   const sheetId = sheetMeta.id
@@ -126,15 +174,17 @@ const result = await js(String.raw`(async () => {{
   }}
 
   let headerRow = -1
-  let videoColumn = -1
-  for (const [key, cell] of cells) {{
-    if (collectText(cell?.value) !== wantedHeader) continue
-    const [row, column] = key.split(':').map(Number)
-    headerRow = row
-    videoColumn = column
-    break
+    let videoColumn = wantedColumn
+    if (videoColumn < 0) {{
+        for (const [key, cell] of cells) {{
+            if (collectText(cell?.value) !== wantedHeader) continue
+            const [row, column] = key.split(':').map(Number)
+            headerRow = row
+            videoColumn = column
+            break
+        }}
   }}
-  if (videoColumn < 0) throw new Error('未找到列标题：' + wantedHeader)
+    if (videoColumn < 0) throw new Error('未找到列标题或列字母：' + wantedHeader)
 
   const attachments = []
   const seen = new Set()
@@ -163,7 +213,7 @@ const result = await js(String.raw`(async () => {{
 
   for (const [key, cell] of cells) {{
     const [row, column] = key.split(':').map(Number)
-    if (row <= headerRow || column !== videoColumn) continue
+    if ((headerRow >= 0 && row <= headerRow) || column !== videoColumn) continue
     findAttachments(cell, row, column)
   }}
 
@@ -179,8 +229,22 @@ const result = await js(String.raw`(async () => {{
   // sheet application. Loading an already-loaded chunk is a no-op.
   try {{ await require.e(97240) }} catch {{}}
   let getDownloadUrl = null
-  for (const moduleId of Object.keys(require.m || {{}})) {{
-    const source = Function.prototype.toString.call(require.m[moduleId])
+    try {{
+        const fileManager = require(683822)?.b
+        const resourceType = require(551443)?.Wz?.EMBED
+        if (fileManager && typeof fileManager.getDownloadUrl === 'function' && resourceType) {{
+            getDownloadUrl = (resourceId, name) => fileManager.getDownloadUrl({{
+                resourceId,
+                resourceType,
+                name,
+            }})
+        }}
+    }} catch {{}}
+    for (const moduleId of Object.keys(require.m || {{}})) {{
+        if (getDownloadUrl) break
+        const factory = require.m[moduleId]
+        if (typeof factory !== 'function') continue
+        const source = Function.prototype.toString.call(factory)
     // Only initialize the small file-service adapter. Requiring arbitrary modules
     // while searching can start unrelated UI components with missing context.
     if (
@@ -202,10 +266,10 @@ const result = await js(String.raw`(async () => {{
   }}
   // Stable fallback for the current adapter; the source scan above remains the
   // preferred path so minor export-name changes do not matter.
-  if (!getDownloadUrl) {{
+    if (!getDownloadUrl) {{
     try {{
       const exports = require(641028)
-      if (typeof exports?.km === 'function') getDownloadUrl = exports.km
+            if (typeof exports?.km === 'function') getDownloadUrl = exports.km
     }} catch {{}}
   }}
   if (!getDownloadUrl) throw new Error('未找到钉钉附件下载接口，可能是页面版本已变更')
@@ -372,9 +436,29 @@ def _recorded_file(
 
 
 def _download(attachment: SheetAttachment, destination: Path) -> None:
+    for attempt in range(1, 13):
+        try:
+            _download_attempt(attachment, destination)
+            return
+        except urllib.error.HTTPError as error:
+            if error.code not in (408, 429, 500, 502, 503, 504):
+                raise
+            failure = error
+        except (OSError, urllib.error.URLError, http.client.HTTPException, RuntimeError) as error:
+            failure = error
+        if attempt == 12:
+            raise RuntimeError(f"已尝试 12 次，仍未下载完成：{failure}") from failure
+        print(f"    传输未完成：{failure}；即将重试 {attempt}/11（保留已下载部分）", flush=True)
+        time.sleep(min(attempt * 2, 10))
+
+
+def _download_attempt(attachment: SheetAttachment, destination: Path) -> None:
     partial = destination.with_name(destination.name + ".part")
     downloaded = partial.stat().st_size if partial.exists() else 0
-    if attachment.size and downloaded >= attachment.size:
+    if attachment.size and downloaded == attachment.size:
+        os.replace(partial, destination)
+        return
+    if attachment.size and downloaded > attachment.size:
         partial.unlink()
         downloaded = 0
 
@@ -384,7 +468,21 @@ def _download(attachment: SheetAttachment, destination: Path) -> None:
     request = urllib.request.Request(attachment.download_url, headers=headers)
 
     with urllib.request.urlopen(request, timeout=60) as response:
-        append = downloaded > 0 and getattr(response, "status", 200) == 206
+        status = getattr(response, "status", 200)
+        if status == 206:
+            content_range = re.fullmatch(
+                r"bytes (\d+)-(\d+)/(\d+|\*)", response.headers.get("Content-Range", "")
+            )
+            if (
+                not content_range
+                or int(content_range[1]) != downloaded
+                or int(content_range[2]) < downloaded
+                or (attachment.size and content_range[3] != str(attachment.size))
+            ):
+                raise RuntimeError("服务器返回的续传字节范围不匹配，未写入本次响应")
+        elif status != 200:
+            raise RuntimeError(f"非预期的下载响应状态：{status}")
+        append = downloaded > 0 and status == 206
         if downloaded and not append:
             downloaded = 0
         mode = "ab" if append else "wb"
@@ -450,6 +548,27 @@ def download_all(
     return downloaded_count, skipped_count, errors
 
 
+def configured_sources() -> list[tuple[str, str, str]]:
+    sources = [
+        (
+            os.getenv("DINGTALK_SHEET_URL", DEFAULT_SHEET_URL).strip(),
+            os.getenv("DINGTALK_SHEET_TITLE", DEFAULT_SHEET_TITLE).strip(),
+            os.getenv("DINGTALK_VIDEO_COLUMN", DEFAULT_COLUMN_HEADER).strip(),
+        )
+    ]
+    index = 2
+    while url := os.getenv(f"DINGTALK_SHEET_URL_{index}", "").strip():
+        sources.append(
+            (
+                url,
+                os.getenv(f"DINGTALK_SHEET_TITLE_{index}", DEFAULT_SHEET_TITLE).strip(),
+                os.getenv(f"DINGTALK_VIDEO_COLUMN_{index}", DEFAULT_COLUMN_HEADER).strip(),
+            )
+        )
+        index += 1
+    return sources
+
+
 def main() -> int:
     root_dir = Path(__file__).resolve().parent.parent
     load_dotenv(root_dir / ".env")
@@ -459,37 +578,59 @@ def main() -> int:
     parser.add_argument("--output", required=True, help="视频保存目录")
     parser.add_argument(
         "--url",
-        default=os.getenv("DINGTALK_SHEET_URL", DEFAULT_SHEET_URL).strip(),
+        default=None,
         help="钉钉表格地址",
     )
     parser.add_argument(
         "--sheet-title",
-        default=os.getenv("DINGTALK_SHEET_TITLE", DEFAULT_SHEET_TITLE).strip(),
+        default=None,
         help="工作表名称",
     )
     parser.add_argument(
         "--column-header",
-        default=os.getenv("DINGTALK_VIDEO_COLUMN", DEFAULT_COLUMN_HEADER).strip(),
-        help="视频列的表头文字",
+        default=None,
+        help="视频列的表头文字或 Excel 列字母，例如 E",
     )
     parser.add_argument("--dry-run", action="store_true", help="只列出本次需要下载的文件")
     args = parser.parse_args()
 
     output_dir = Path(args.output).expanduser().resolve()
+    sources = (
+        [
+            (
+                args.url,
+                args.sheet_title or DEFAULT_SHEET_TITLE,
+                args.column_header or DEFAULT_COLUMN_HEADER,
+            )
+        ]
+        if args.url
+        else configured_sources()
+    )
     print(f"保存目录：{output_dir}")
-    print("正在读取钉钉表格…")
     try:
-        doc_key, attachments = extract_attachments(
-            args.url, args.sheet_title, args.column_header
-        )
-        total_size = sum(item.size for item in attachments)
-        print(
-            f"表格中共找到 {len(attachments)} 个视频，"
-            f"合计 {total_size / 1024 / 1024:.1f} MB。"
-        )
-        downloaded, skipped, errors = download_all(
-            output_dir, doc_key, attachments, dry_run=args.dry_run
-        )
+        downloaded = skipped = 0
+        errors: list[str] = []
+        for index, (sheet_url, sheet_title, column_header) in enumerate(sources, start=1):
+            print(f"正在读取钉钉表格 {index}/{len(sources)}：{sheet_title}…")
+            try:
+                doc_key, attachments = extract_attachments(
+                    sheet_url, sheet_title, column_header
+                )
+                total_size = sum(item.size for item in attachments)
+                print(
+                    f"表格中共找到 {len(attachments)} 个视频，"
+                    f"合计 {total_size / 1024 / 1024:.1f} MB。"
+                )
+                source_downloaded, source_skipped, source_errors = download_all(
+                    output_dir, doc_key, attachments, dry_run=args.dry_run
+                )
+                downloaded += source_downloaded
+                skipped += source_skipped
+                errors.extend(source_errors)
+            except Exception as error:
+                message = f"{sheet_title}：{error}"
+                errors.append(message)
+                print(f"表格处理失败：{error}", file=sys.stderr)
     except Exception as error:
         print(f"运行失败：{error}", file=sys.stderr)
         return 1
