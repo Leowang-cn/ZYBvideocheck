@@ -30,7 +30,7 @@ def main() -> int:
         settings = replace(settings, snapshots_only=args.snapshots_only)
         settings.input_dir.mkdir(parents=True, exist_ok=True)
         uploader = CosUploader(settings)
-        report_path, errors = run(settings, uploader, args.batch)
+        report_path, errors = run(settings, uploader, args.batch, progress=_print_progress)
     except Exception as error:
         print(f"运行失败：{error}", file=sys.stderr)
         return 1
@@ -44,6 +44,10 @@ def main() -> int:
     else:
         print("没有发现需要处理的新视频。")
     return 0 if not errors else 2
+
+
+def _print_progress(message: str) -> None:
+    print(message, flush=True)
 
 
 if __name__ == "__main__":

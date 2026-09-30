@@ -123,10 +123,15 @@ class PipelineTests(unittest.TestCase):
                 secret_key="",
             )
             uploader = FakeUploader()
+            progress_messages: list[str] = []
 
-            report_path, errors = run(settings, uploader, "测试批次")
+            report_path, errors = run(settings, uploader, "测试批次", progress=progress_messages.append)
 
             self.assertEqual(errors, [])
+            self.assertIn("共发现 1 个视频，开始处理。", progress_messages)
+            self.assertTrue(any("开始：测试视频.mp4" in message for message in progress_messages))
+            self.assertTrue(any("完成：测试视频.mp4" in message for message in progress_messages))
+            self.assertIn("生成 HTML 报告", progress_messages)
             self.assertIsNotNone(report_path)
             self.assertEqual(len(uploader.uploads), 4)
             self.assertTrue(uploader.uploads[1][0].is_file())
